@@ -1,0 +1,22 @@
+export const palette = {
+  background: '#0b0907',
+  surface: 'rgba(20, 16, 11, 0.9)',
+  surfaceStrong: '#17120c',
+  surfaceMuted: '#221c15',
+  border: 'rgba(255, 255, 255, 0.06)',
+  borderSoft: '#2d2419',
+  track: '#2a231a',
+  text: '#fff8ef',
+  textStrong: '#fff9f0',
+  textMuted: '#b09e8c',
+  textSoft: '#dccab7',
+  amber: '#f59e0b',
+  amberSoft: '#f5b147',
+  teal: '#2dd4bf',
+  cyan: '#38bdf8',
+  purple: '#c084fc',
+  green: '#8ef3d7',
+  red: '#fda4af',
+  redSurface: '#351719',
+};
+

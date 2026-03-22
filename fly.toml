@@ -1,0 +1,31 @@
+app = "fastlane-tracker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  TRUST_PROXY = "1"
+  SERVE_WEB_DIST = "1"
+  ENFORCE_HTTPS = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = false
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[mounts]]
+  source = "fastlane_data"
+  destination = "/app/server/data"

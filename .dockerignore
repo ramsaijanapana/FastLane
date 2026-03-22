@@ -1,0 +1,10 @@
+node_modules
+server/node_modules
+.expo
+.expo-shared
+.git
+dist
+coverage
+*.log
+.env
+server/data/db.json

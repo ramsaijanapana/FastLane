@@ -1,0 +1,47 @@
+name: Mobile Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which platform to release"
+        required: true
+        type: choice
+        options:
+          - android
+          - ios
+      submit:
+        description: "Auto-submit after the build completes"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build production app
+        run: |
+          if [ "${{ inputs.submit }}" = "true" ]; then
+            eas build --platform ${{ inputs.platform }} --profile production --auto-submit --non-interactive
+          else
+            eas build --platform ${{ inputs.platform }} --profile production --non-interactive
+          fi
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

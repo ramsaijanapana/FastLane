@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: fastlane-fasting-tracker-web
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB_DIST
+        value: "1"
+      - key: ENFORCE_HTTPS
+        value: "1"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: FASTLANE_JWT_SECRET
+        generateValue: true
+      - key: FASTLANE_JWT_ISSUER
+        value: fastlane-api
+      - key: FASTLANE_JWT_AUDIENCE
+        value: fastlane-app
+      - key: OAUTH_PUBLIC_BASE_URL
+        value: https://fastlane-fasting-tracker-web.onrender.com
+      - key: ALLOWED_WEB_ORIGINS
+        value: https://fastlane-fasting-tracker-web.onrender.com

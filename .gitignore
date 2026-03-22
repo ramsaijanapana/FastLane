@@ -1,0 +1,10 @@
+node_modules/
+server/node_modules/
+.expo/
+.expo-shared/
+.env
+dist/
+web-build/
+*.log
+coverage/
+server/data/db.json
