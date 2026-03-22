@@ -17,7 +17,7 @@ import {
   STORAGE_KEY,
   XP_PER_LEVEL,
 } from './constants';
-import { ChipButton, ProgressBar } from './components/ui';
+import { ActionButton, ChipButton, ProgressBar, SectionCard } from './components/ui';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
 import { JournalScreen } from './screens/JournalScreen';
@@ -74,7 +74,7 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'journal', label: 'Journal' },
   { key: 'insights', label: 'Insights' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'settings', label: 'Account' },
 ];
 
 const authProviderLabels = {
@@ -696,6 +696,53 @@ export const AppShell = () => {
           </View>
         </View>
 
+        <SectionCard
+          title={authSession ? 'Cloud Sync Connected' : 'Sign In For Sync'}
+          subtitle={
+            authSession
+              ? `Signed in as ${getAuthIdentity(authSession)}. Open Account to manage sync, backup, and settings.`
+              : 'Use Google, Facebook, or email and password. The app still works offline if you skip sign-in.'
+          }
+          style={styles.authCard}
+        >
+          <View style={styles.authCardRow}>
+            {authSession ? (
+              <>
+                <ActionButton
+                  label="Open Account"
+                  onPress={() => setSelectedTab('settings')}
+                  tone="secondary"
+                />
+                <ActionButton
+                  label={authBusy ? 'Syncing...' : 'Push Sync'}
+                  onPress={handlePushSync}
+                  disabled={authBusy}
+                />
+              </>
+            ) : (
+              <>
+                <ActionButton
+                  label={authBusy ? 'Opening...' : 'Google'}
+                  onPress={() => handleSocialLogin('google')}
+                  disabled={authBusy}
+                />
+                <ActionButton
+                  label={authBusy ? 'Opening...' : 'Facebook'}
+                  onPress={() => handleSocialLogin('facebook')}
+                  tone="secondary"
+                  disabled={authBusy}
+                />
+                <ActionButton
+                  label="Email & Password"
+                  onPress={() => setSelectedTab('settings')}
+                  tone="secondary"
+                />
+              </>
+            )}
+          </View>
+          <Text style={styles.authCardMeta}>{syncStatus}</Text>
+        </SectionCard>
+
         <View style={styles.tabRow}>
           {tabs.map((tab) => (
             <ChipButton
@@ -892,6 +939,19 @@ const styles = StyleSheet.create({
   rankMeta: {
     color: '#b8a999',
     fontSize: 13,
+  },
+  authCard: {
+    backgroundColor: 'rgba(22, 17, 11, 0.92)',
+  },
+  authCardRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  authCardMeta: {
+    color: palette.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   tabRow: {
     flexDirection: 'row',
