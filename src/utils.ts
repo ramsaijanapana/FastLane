@@ -12,6 +12,7 @@ import type {
   FastingStage,
   MealEntry,
   QuestStatus,
+  ThemeKey,
   WaterEntry,
 } from './types';
 
@@ -410,6 +411,10 @@ export const migrateAppState = (raw: unknown): AppState => {
   const value = raw as Partial<AppState> & {
     settings?: Partial<AppState['settings']>;
   };
+  const validThemeKeys: ThemeKey[] = ['midnight', 'daylight', 'forest', 'sunrise'];
+  const themeKey = validThemeKeys.includes(value.settings?.themeKey as ThemeKey)
+    ? (value.settings?.themeKey as ThemeKey)
+    : DEFAULT_SETTINGS.themeKey;
 
   return {
     activeFast: normalizeFast(value.activeFast) ?? null,
@@ -432,6 +437,7 @@ export const migrateAppState = (raw: unknown): AppState => {
     settings: {
       ...DEFAULT_SETTINGS,
       ...value.settings,
+      themeKey,
     },
     lastUpdatedAt:
       typeof value.lastUpdatedAt === 'number' ? value.lastUpdatedAt : Date.now(),

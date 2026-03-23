@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dailyCalorieGoal: 1900,
   weeklyFastGoal: 5,
   coachingTone: 'steady',
+  themeKey: 'midnight',
   remindersEnabled: false,
   reminderHour: 19,
 };

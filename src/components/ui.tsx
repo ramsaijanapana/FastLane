@@ -1,13 +1,8 @@
-import React from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
+import React, { useMemo } from 'react';
+import { Pressable, StyleProp, StyleSheet, Text, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
-import { palette } from '../theme';
+import { ThemePalette, useTheme } from '../theme';
 
 export const SectionCard = ({
   title,
@@ -19,37 +14,47 @@ export const SectionCard = ({
   subtitle?: string;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-}) => (
-  <View style={[styles.card, style]}>
-    <View style={styles.header}>
-      <Text style={styles.title}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+}) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  return (
+    <View style={[styles.card, style]}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
+      {children}
     </View>
-    {children}
-  </View>
-);
+  );
+};
 
 export const ProgressBar = ({
   progress,
-  accent = palette.amber,
+  accent,
   height = 10,
 }: {
   progress: number;
   accent?: string;
   height?: number;
-}) => (
-  <View style={[styles.progressTrack, { height }]}>
-    <View
-      style={[
-        styles.progressFill,
-        {
-          width: `${Math.max(Math.min(progress, 1) * 100, progress > 0 ? 6 : 0)}%`,
-          backgroundColor: accent,
-        },
-      ]}
-    />
-  </View>
-);
+}) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  return (
+    <View style={[styles.progressTrack, { height }]}>
+      <View
+        style={[
+          styles.progressFill,
+          {
+            width: `${Math.max(Math.min(progress, 1) * 100, progress > 0 ? 6 : 0)}%`,
+            backgroundColor: accent ?? theme.amber,
+          },
+        ]}
+      />
+    </View>
+  );
+};
 
 export const MetricTile = ({
   value,
@@ -59,36 +64,47 @@ export const MetricTile = ({
   value: string;
   label: string;
   hint?: string;
-}) => (
-  <View style={styles.metricTile}>
-    <Text style={styles.metricValue}>{value}</Text>
-    <Text style={styles.metricLabel}>{label}</Text>
-    {hint ? <Text style={styles.metricHint}>{hint}</Text> : null}
-  </View>
-);
+}) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  return (
+    <View style={styles.metricTile}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+      {hint ? <Text style={styles.metricHint}>{hint}</Text> : null}
+    </View>
+  );
+};
 
 export const ChipButton = ({
   label,
   onPress,
   selected,
-  accent = palette.amber,
+  accent,
 }: {
   label: string;
   onPress: () => void;
   selected?: boolean;
   accent?: string;
-}) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.chip,
-      selected && { backgroundColor: accent, borderColor: accent },
-      pressed && styles.pressed,
-    ]}
-  >
-    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-  </Pressable>
-);
+}) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const chipAccent = accent ?? theme.amber;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && { backgroundColor: chipAccent, borderColor: chipAccent },
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+};
 
 export const ActionButton = ({
   label,
@@ -100,145 +116,153 @@ export const ActionButton = ({
   onPress: () => void;
   tone?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
-}) => (
-  <Pressable
-    onPress={onPress}
-    disabled={disabled}
-    style={({ pressed }) => [
-      styles.button,
-      tone === 'primary' && styles.buttonPrimary,
-      tone === 'secondary' && styles.buttonSecondary,
-      tone === 'danger' && styles.buttonDanger,
-      (pressed || disabled) && styles.pressed,
-    ]}
-  >
-    <Text
-      style={[
-        styles.buttonText,
-        tone === 'primary' && styles.buttonTextPrimary,
-        tone === 'secondary' && styles.buttonTextSecondary,
-        tone === 'danger' && styles.buttonTextDanger,
+}) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.button,
+        tone === 'primary' && styles.buttonPrimary,
+        tone === 'secondary' && styles.buttonSecondary,
+        tone === 'danger' && styles.buttonDanger,
+        (pressed || disabled) && styles.pressed,
       ]}
     >
-      {label}
-    </Text>
-  </Pressable>
-);
+      <Text
+        style={[
+          styles.buttonText,
+          tone === 'primary' && styles.buttonTextPrimary,
+          tone === 'secondary' && styles.buttonTextSecondary,
+          tone === 'danger' && styles.buttonTextDanger,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+};
 
-export const EmptyState = ({ text }: { text: string }) => (
-  <Text style={styles.empty}>{text}</Text>
-);
+export const EmptyState = ({ text }: { text: string }) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  return <Text style={styles.empty}>{text}</Text>;
+};
 
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 30,
-    padding: 22,
-    backgroundColor: palette.surface,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 18,
-  },
-  header: {
-    gap: 6,
-  },
-  title: {
-    color: palette.text,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  subtitle: {
-    color: '#a49584',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  progressTrack: {
-    borderRadius: 999,
-    backgroundColor: palette.track,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  metricTile: {
-    minWidth: 120,
-    padding: 18,
-    borderRadius: 24,
-    backgroundColor: palette.surfaceStrong,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    gap: 4,
-  },
-  metricValue: {
-    color: '#fff6eb',
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  metricLabel: {
-    color: '#b8a999',
-    fontSize: 13,
-  },
-  metricHint: {
-    color: palette.textSoft,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  chip: {
-    minWidth: 72,
-    borderRadius: 999,
-    paddingVertical: 11,
-    paddingHorizontal: 15,
-    alignItems: 'center',
-    backgroundColor: '#1b150f',
-    borderWidth: 1,
-    borderColor: palette.borderSoft,
-  },
-  chipText: {
-    color: '#f4e8d7',
-    fontWeight: '700',
-  },
-  chipTextSelected: {
-    color: '#120e0a',
-  },
-  button: {
-    minHeight: 46,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonPrimary: {
-    backgroundColor: palette.amber,
-  },
-  buttonSecondary: {
-    backgroundColor: palette.surfaceMuted,
-    borderWidth: 1,
-    borderColor: '#3a3025',
-  },
-  buttonDanger: {
-    backgroundColor: palette.redSurface,
-    borderWidth: 1,
-    borderColor: '#5f252a',
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  buttonTextPrimary: {
-    color: '#130f0b',
-  },
-  buttonTextSecondary: {
-    color: '#f4e8d7',
-  },
-  buttonTextDanger: {
-    color: '#ffe4e7',
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-  empty: {
-    color: palette.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-});
+const createStyles = (theme: ThemePalette) =>
+  StyleSheet.create({
+    card: {
+      borderRadius: 30,
+      padding: 22,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      gap: 18,
+    },
+    header: {
+      gap: 6,
+    },
+    title: {
+      color: theme.text,
+      fontSize: 22,
+      fontWeight: '800',
+    },
+    subtitle: {
+      color: theme.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    progressTrack: {
+      borderRadius: 999,
+      backgroundColor: theme.track,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 999,
+    },
+    metricTile: {
+      minWidth: 120,
+      padding: 18,
+      borderRadius: 24,
+      backgroundColor: theme.surfaceStrong,
+      borderWidth: 1,
+      borderColor: theme.border,
+      gap: 4,
+    },
+    metricValue: {
+      color: theme.textStrong,
+      fontSize: 28,
+      fontWeight: '900',
+    },
+    metricLabel: {
+      color: theme.textMuted,
+      fontSize: 13,
+    },
+    metricHint: {
+      color: theme.textSoft,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    chip: {
+      minWidth: 72,
+      borderRadius: 999,
+      paddingVertical: 11,
+      paddingHorizontal: 15,
+      alignItems: 'center',
+      backgroundColor: theme.surfaceMuted,
+      borderWidth: 1,
+      borderColor: theme.borderSoft,
+    },
+    chipText: {
+      color: theme.text,
+      fontWeight: '700',
+    },
+    chipTextSelected: {
+      color: theme.background,
+    },
+    button: {
+      minHeight: 46,
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonPrimary: {
+      backgroundColor: theme.amber,
+    },
+    buttonSecondary: {
+      backgroundColor: theme.surfaceMuted,
+      borderWidth: 1,
+      borderColor: theme.borderSoft,
+    },
+    buttonDanger: {
+      backgroundColor: theme.redSurface,
+      borderWidth: 1,
+      borderColor: theme.red,
+    },
+    buttonText: {
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    buttonTextPrimary: {
+      color: theme.background,
+    },
+    buttonTextSecondary: {
+      color: theme.text,
+    },
+    buttonTextDanger: {
+      color: theme.red,
+    },
+    pressed: {
+      opacity: 0.72,
+    },
+    empty: {
+      color: theme.textMuted,
+      fontSize: 14,
+      lineHeight: 21,
+    },
+  });

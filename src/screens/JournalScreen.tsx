@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import { TARGET_OPTIONS, WATER_PRESETS } from '../constants';
-import { palette } from '../theme';
+import { ThemePalette, useTheme } from '../theme';
 import type { FastSession, MealEntry, WaterEntry } from '../types';
 import {
   formatClock,
@@ -60,6 +60,8 @@ export const JournalScreen = ({
   onUpdateFast,
   onDeleteFast,
 }: JournalScreenProps) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
   const { width } = useWindowDimensions();
   const isCompact = width < 1020;
 
@@ -186,14 +188,14 @@ export const JournalScreen = ({
               value={mealName}
               onChangeText={setMealName}
               placeholder="Meal or snack"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               style={styles.input}
             />
             <TextInput
               value={mealCalories}
               onChangeText={setMealCalories}
               placeholder="Calories (optional)"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               keyboardType="decimal-pad"
               style={styles.input}
             />
@@ -201,7 +203,7 @@ export const JournalScreen = ({
               value={mealNote}
               onChangeText={setMealNote}
               placeholder="Short note, like how you felt"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               style={[styles.input, styles.noteInput]}
               multiline
             />
@@ -272,7 +274,7 @@ export const JournalScreen = ({
                 value={customWater}
                 onChangeText={setCustomWater}
                 placeholder="Custom water amount"
-                placeholderTextColor="#8f877a"
+                placeholderTextColor={palette.textMuted}
                 keyboardType="number-pad"
                 style={[styles.input, styles.flexInput]}
               />
@@ -310,7 +312,7 @@ export const JournalScreen = ({
                   value={fastDuration}
                   onChangeText={setFastDuration}
                   placeholder="Duration hours"
-                  placeholderTextColor="#8f877a"
+                  placeholderTextColor={palette.textMuted}
                   keyboardType="decimal-pad"
                   style={styles.input}
                 />
@@ -328,7 +330,7 @@ export const JournalScreen = ({
                   value={fastNote}
                   onChangeText={setFastNote}
                   placeholder="Session note (optional)"
-                  placeholderTextColor="#8f877a"
+                  placeholderTextColor={palette.textMuted}
                   style={[styles.input, styles.noteInput]}
                   multiline
                 />
@@ -381,7 +383,7 @@ export const JournalScreen = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette: ThemePalette) => StyleSheet.create({
   wrap: {
     gap: 20,
   },
@@ -466,10 +468,10 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#241d14',
+    borderBottomColor: palette.borderSoft,
   },
   fastStatus: {
-    color: '#f6c164',
+    color: palette.amberSoft,
     fontSize: 12,
     fontWeight: '700',
     marginTop: 6,

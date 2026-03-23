@@ -21,6 +21,7 @@ export type WaterEntry = {
 };
 
 export type CoachingTone = 'steady' | 'gentle' | 'focused';
+export type ThemeKey = 'midnight' | 'daylight' | 'forest' | 'sunrise';
 
 export type UserSettings = {
   displayName: string;
@@ -29,6 +30,7 @@ export type UserSettings = {
   dailyCalorieGoal: number;
   weeklyFastGoal: number;
   coachingTone: CoachingTone;
+  themeKey: ThemeKey;
   remindersEnabled: boolean;
   reminderHour: number;
 };

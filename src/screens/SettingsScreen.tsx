@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { TARGET_OPTIONS } from '../constants';
 import { apiBaseUrl } from '../services/api';
-import { palette } from '../theme';
+import { resolveTheme, themeOptions, ThemePalette, useTheme } from '../theme';
 import type {
   AuthSession,
   CoachingTone,
@@ -53,6 +53,8 @@ export const SettingsScreen = ({
   onImportBackup,
   onSaveSettings,
 }: SettingsScreenProps) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
   const authIdentity =
     authSession?.isPlaceholderEmail && authSession.provider
       ? `${authSession.name} via ${authSession.provider === 'google' ? 'Google' : 'Facebook'}`
@@ -73,6 +75,7 @@ export const SettingsScreen = ({
   const [coachingTone, setCoachingTone] = useState<CoachingTone>(
     settings.coachingTone,
   );
+  const [themeKey, setThemeKey] = useState(settings.themeKey);
   const [remindersEnabled, setRemindersEnabled] = useState(
     settings.remindersEnabled,
   );
@@ -88,6 +91,7 @@ export const SettingsScreen = ({
     setWeeklyFastGoal(String(settings.weeklyFastGoal));
     setDefaultFastGoalHours(settings.defaultFastGoalHours);
     setCoachingTone(settings.coachingTone);
+    setThemeKey(settings.themeKey);
     setRemindersEnabled(settings.remindersEnabled);
     setReminderHour(settings.reminderHour);
     setName(settings.displayName);
@@ -105,6 +109,7 @@ export const SettingsScreen = ({
       dailyCalorieGoal: Number.isFinite(nextCalorieGoal) && nextCalorieGoal > 0 ? nextCalorieGoal : settings.dailyCalorieGoal,
       weeklyFastGoal: Number.isFinite(nextWeeklyGoal) && nextWeeklyGoal > 0 ? nextWeeklyGoal : settings.weeklyFastGoal,
       coachingTone,
+      themeKey,
       remindersEnabled,
       reminderHour,
     });
@@ -162,14 +167,14 @@ export const SettingsScreen = ({
               value={name}
               onChangeText={setName}
               placeholder="Name for registration"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               style={styles.input}
             />
             <TextInput
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               autoCapitalize="none"
               keyboardType="email-address"
               style={styles.input}
@@ -178,7 +183,7 @@ export const SettingsScreen = ({
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
-              placeholderTextColor="#8f877a"
+              placeholderTextColor={palette.textMuted}
               secureTextEntry
               style={styles.input}
             />
@@ -208,14 +213,14 @@ export const SettingsScreen = ({
       </SectionCard>
 
       <SectionCard
-        title="Profile"
-        subtitle="These settings personalize the app without adding account complexity."
+        title="Profile & Appearance"
+        subtitle="Personalize the tone, name, and visual style without adding setup friction."
       >
         <TextInput
           value={displayName}
           onChangeText={setDisplayName}
           placeholder="Display name"
-          placeholderTextColor="#8f877a"
+          placeholderTextColor={palette.textMuted}
           style={styles.input}
         />
         <View style={styles.fieldGroup}>
@@ -230,6 +235,67 @@ export const SettingsScreen = ({
                 accent={palette.purple}
               />
             ))}
+          </View>
+        </View>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Theme</Text>
+          <View style={styles.themeGrid}>
+            {themeOptions.map((option) => {
+              const previewTheme = resolveTheme(option.key);
+
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setThemeKey(option.key)}
+                  style={({ pressed }) => [
+                    styles.themeCard,
+                    {
+                      backgroundColor: option.previewBackground,
+                      borderColor:
+                        themeKey === option.key ? palette.amber : palette.borderSoft,
+                    },
+                    pressed && styles.themeCardPressed,
+                  ]}
+                >
+                  <View style={styles.themeCardTop}>
+                    <Text
+                      style={[
+                        styles.themeCardTitle,
+                        { color: previewTheme.textStrong },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {themeKey === option.key ? (
+                      <Text
+                        style={[
+                          styles.themeCardState,
+                          { color: previewTheme.amberSoft },
+                        ]}
+                      >
+                        Selected
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.themeCardDescription,
+                      { color: previewTheme.textSoft },
+                    ]}
+                  >
+                    {option.description}
+                  </Text>
+                  <View style={styles.themeSwatchRow}>
+                    {option.swatches.map((swatch) => (
+                      <View
+                        key={`${option.key}-${swatch}`}
+                        style={[styles.themeSwatch, { backgroundColor: swatch }]}
+                      />
+                    ))}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       </SectionCard>
@@ -287,7 +353,7 @@ export const SettingsScreen = ({
           value={dailyWaterGoalMl}
           onChangeText={setDailyWaterGoalMl}
           placeholder="Daily water goal (ml)"
-          placeholderTextColor="#8f877a"
+          placeholderTextColor={palette.textMuted}
           keyboardType="number-pad"
           style={styles.input}
         />
@@ -295,7 +361,7 @@ export const SettingsScreen = ({
           value={dailyCalorieGoal}
           onChangeText={setDailyCalorieGoal}
           placeholder="Daily calorie goal"
-          placeholderTextColor="#8f877a"
+          placeholderTextColor={palette.textMuted}
           keyboardType="number-pad"
           style={styles.input}
         />
@@ -303,7 +369,7 @@ export const SettingsScreen = ({
           value={weeklyFastGoal}
           onChangeText={setWeeklyFastGoal}
           placeholder="Weekly completed-fast target"
-          placeholderTextColor="#8f877a"
+          placeholderTextColor={palette.textMuted}
           keyboardType="number-pad"
           style={styles.input}
         />
@@ -344,7 +410,7 @@ export const SettingsScreen = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette: ThemePalette) => StyleSheet.create({
   wrap: {
     gap: 20,
   },
@@ -371,6 +437,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  themeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  themeCard: {
+    flexGrow: 1,
+    minWidth: 160,
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 10,
+  },
+  themeCardPressed: {
+    opacity: 0.82,
+  },
+  themeCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  themeCardTitle: {
+    color: palette.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  themeCardState: {
+    color: palette.amberSoft,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  themeCardDescription: {
+    color: palette.textSoft,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  themeSwatchRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  themeSwatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
   },
   noteList: {
     gap: 8,

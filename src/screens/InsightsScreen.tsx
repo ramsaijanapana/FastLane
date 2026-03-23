@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { palette } from '../theme';
+import { ThemePalette, useTheme } from '../theme';
 import type { DailySummary, UserSettings } from '../types';
 import { formatHours, formatMl, formatShortDate } from '../utils';
 import { EmptyState, MetricTile, ProgressBar, SectionCard } from '../components/ui';
@@ -25,6 +25,8 @@ export const InsightsScreen = ({
   settings,
   badges,
 }: InsightsScreenProps) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
   const { width } = useWindowDimensions();
   const isCompact = width < 1020;
 
@@ -160,11 +162,20 @@ export const InsightsScreen = ({
 };
 
 const InsightLine = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.insightRow}>
-    <Text style={styles.insightLabel}>{label}</Text>
-    <Text style={styles.insightValue}>{value}</Text>
-  </View>
+  <InsightLineInner label={label} value={value} />
 );
+
+const InsightLineInner = ({ label, value }: { label: string; value: string }) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
+
+  return (
+    <View style={styles.insightRow}>
+      <Text style={styles.insightLabel}>{label}</Text>
+      <Text style={styles.insightValue}>{value}</Text>
+    </View>
+  );
+};
 
 const BarChart = ({
   data,
@@ -177,6 +188,8 @@ const BarChart = ({
   formatter: (value: number) => string;
   accent: string;
 }) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
   const maxValue = Math.max(...data.map(accessor), 1);
 
   return (
@@ -208,7 +221,7 @@ const BarChart = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette: ThemePalette) => StyleSheet.create({
   wrap: {
     gap: 20,
   },
@@ -272,7 +285,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#241d14',
+    borderBottomColor: palette.borderSoft,
   },
   insightLabel: {
     color: palette.textMuted,

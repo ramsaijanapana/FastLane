@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Text,
   useWindowDimensions,
   View,
@@ -22,7 +22,7 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { palette } from './theme';
+import { ThemePalette, useTheme } from './theme';
 import type {
   AppState,
   AuthSession,
@@ -95,8 +95,10 @@ const getAuthIdentity = (session: AuthSession) => {
 };
 
 export const AppShell = () => {
+  const { theme: palette, setThemeKey } = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 960;
+  const styles = useMemo(() => createStyles(palette), [palette]);
 
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [selectedTab, setSelectedTab] = useState<TabKey>('dashboard');
@@ -160,6 +162,10 @@ export const AppShell = () => {
 
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setThemeKey(appState.settings.themeKey);
+  }, [appState.settings.themeKey, setThemeKey]);
 
   useEffect(() => {
     if (!ready || !authSession || !cloudReady) {
@@ -653,7 +659,12 @@ export const AppShell = () => {
   if (!ready) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar />
+        <StatusBar
+          barStyle={
+            palette.statusBarStyle === 'light' ? 'light-content' : 'dark-content'
+          }
+          backgroundColor={palette.background}
+        />
         <ActivityIndicator size="large" color={palette.amber} />
         <Text style={styles.loadingText}>Loading Fastlane...</Text>
       </SafeAreaView>
@@ -662,7 +673,12 @@ export const AppShell = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar />
+      <StatusBar
+        barStyle={
+          palette.statusBarStyle === 'light' ? 'light-content' : 'dark-content'
+        }
+        backgroundColor={palette.background}
+      />
 
       <View pointerEvents="none" style={styles.backgroundWrap}>
         <View style={styles.backgroundGlowPrimary} />
@@ -830,7 +846,7 @@ export const AppShell = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette: ThemePalette) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: palette.background,
@@ -854,7 +870,7 @@ const styles = StyleSheet.create({
     width: 360,
     height: 360,
     borderRadius: 180,
-    backgroundColor: 'rgba(249, 115, 22, 0.16)',
+    backgroundColor: `${palette.amber}29`,
     top: -80,
     left: -120,
   },
@@ -863,7 +879,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: 'rgba(45, 212, 191, 0.10)',
+    backgroundColor: `${palette.teal}1f`,
     top: 220,
     right: -80,
   },
@@ -872,7 +888,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(192, 132, 252, 0.10)',
+    backgroundColor: `${palette.purple}1f`,
     bottom: -40,
     left: 60,
   },
@@ -919,7 +935,7 @@ const styles = StyleSheet.create({
     minWidth: 220,
     padding: 18,
     borderRadius: 24,
-    backgroundColor: 'rgba(23, 18, 12, 0.88)',
+    backgroundColor: palette.surfaceStrong,
     borderWidth: 1,
     borderColor: palette.border,
     gap: 10,
@@ -932,16 +948,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.3,
   },
   rankTitle: {
-    color: '#fff4df',
+    color: palette.textStrong,
     fontSize: 22,
     fontWeight: '800',
   },
   rankMeta: {
-    color: '#b8a999',
+    color: palette.textMuted,
     fontSize: 13,
   },
   authCard: {
-    backgroundColor: 'rgba(22, 17, 11, 0.92)',
+    backgroundColor: palette.surface,
   },
   authCardRow: {
     flexDirection: 'row',
