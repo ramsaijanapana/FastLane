@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ThemePalette, useTheme } from '../theme';
 import type { DailySummary, UserSettings } from '../types';
 import { formatHours, formatMl, formatShortDate } from '../utils';
-import { EmptyState, MetricTile, ProgressBar, SectionCard } from '../components/ui';
+import { ChipButton, EmptyState, ProgressBar, SectionCard } from '../components/ui';
 
 type InsightsScreenProps = {
   chartData: DailySummary[];
@@ -15,6 +15,9 @@ type InsightsScreenProps = {
   settings: UserSettings;
   badges: string[];
 };
+
+type ChartMode = 'fasting' | 'water' | 'calories';
+type CompactPanel = 'overview' | 'trend';
 
 export const InsightsScreen = ({
   chartData,
@@ -29,6 +32,8 @@ export const InsightsScreen = ({
   const styles = useMemo(() => createStyles(palette), [palette]);
   const { width } = useWindowDimensions();
   const isCompact = width < 1020;
+  const [chartMode, setChartMode] = useState<ChartMode>('fasting');
+  const [compactPanel, setCompactPanel] = useState<CompactPanel>('overview');
 
   const bestFastDay =
     chartData.reduce(
@@ -45,127 +50,191 @@ export const InsightsScreen = ({
           chartData.reduce((total, day) => total + day.calories, 0) / chartData.length,
         );
 
+  const chartConfig =
+    chartMode === 'fasting'
+      ? {
+          summary: 'Completed fasting hours across the last 7 days.',
+          accessor: (day: DailySummary) => day.fastingHours,
+          formatter: (value: number) => `${value.toFixed(0)}h`,
+          accent: palette.amber,
+        }
+      : chartMode === 'water'
+        ? {
+            summary: `Hydration against your ${formatMl(settings.dailyWaterGoalMl)} goal.`,
+            accessor: (day: DailySummary) => day.waterMl,
+            formatter: (value: number) => `${Math.round(value)} ml`,
+            accent: palette.teal,
+          }
+        : {
+            summary: 'Visible calorie logging without overcomplicating intake.',
+            accessor: (day: DailySummary) => day.calories,
+            formatter: (value: number) => `${Math.round(value)} cal`,
+            accent: palette.cyan,
+          };
+
   return (
     <View style={styles.wrap}>
       <SectionCard
-        title="7 Day Snapshot"
-        subtitle="A clearer view of consistency, intake, and hydration over the last week."
+        title="Insights"
+        subtitle="One fitted analytics board instead of a stacked report."
+        style={styles.boardCard}
       >
-        <View style={styles.metricGrid}>
-          <MetricTile value={formatHours(longestFastHours)} label="longest fast" />
-          <MetricTile value={formatHours(averageFastHours)} label="7-day avg fast" />
-          <MetricTile value={`${streak}`} label="current streak" />
-          <MetricTile
+        <View style={styles.statsRow}>
+          <InsightStat value={formatHours(longestFastHours)} label="longest fast" />
+          <InsightStat value={formatHours(averageFastHours)} label="7-day avg" />
+          <InsightStat
             value={`${weeklyCompletion}/${settings.weeklyFastGoal}`}
-            label="weekly fast progress"
+            label="weekly progress"
           />
-          <MetricTile value={`${averageCalories}`} label="avg daily calories" />
-          <MetricTile value={`${waterGoalHitDays}/7`} label="water-goal days" />
+          <InsightStat value={`${waterGoalHitDays}/7`} label="water-goal days" />
         </View>
-      </SectionCard>
 
-      <View style={[styles.grid, !isCompact && styles.gridWide]}>
-        <SectionCard
-          title="Fasting Hours"
-          subtitle="Completed fasting hours by day."
-          style={styles.flexCard}
-        >
-          {chartData.length === 0 ? (
-            <EmptyState text="Finish a few windows to populate your first trend chart." />
-          ) : (
-            <BarChart
-              data={chartData}
-              accessor={(day) => day.fastingHours}
-              formatter={(value) => `${value.toFixed(0)}h`}
+        {isCompact ? (
+          <View style={styles.panelSwitchRow}>
+            <ChipButton
+              label="Overview"
+              onPress={() => setCompactPanel('overview')}
+              selected={compactPanel === 'overview'}
               accent={palette.amber}
             />
-          )}
-        </SectionCard>
-
-        <SectionCard
-          title="Water Intake"
-          subtitle="Hydration totals across the week."
-          style={styles.flexCard}
-        >
-          {chartData.length === 0 ? (
-            <EmptyState text="Log water to track hydration patterns here." />
-          ) : (
-            <BarChart
-              data={chartData}
-              accessor={(day) => day.waterMl}
-              formatter={(value) => `${Math.round(value)} ml`}
+            <ChipButton
+              label="Trend"
+              onPress={() => setCompactPanel('trend')}
+              selected={compactPanel === 'trend'}
               accent={palette.teal}
             />
-          )}
-        </SectionCard>
-      </View>
+          </View>
+        ) : null}
 
-      <View style={[styles.grid, !isCompact && styles.gridWide]}>
-        <SectionCard
-          title="Calories"
-          subtitle="Visible intake without overcomplicating logging."
-          style={styles.flexCard}
-        >
-          {chartData.length === 0 ? (
-            <EmptyState text="Calorie totals appear after you start logging meals." />
-          ) : (
-            <BarChart
-              data={chartData}
-              accessor={(day) => day.calories}
-              formatter={(value) => `${Math.round(value)} cal`}
-              accent={palette.cyan}
-            />
-          )}
-        </SectionCard>
+        {!isCompact || compactPanel === 'overview' ? (
+          <View style={[styles.boardRow, !isCompact && styles.boardRowWide]}>
+            <View style={styles.noteColumn}>
+              <InsightLine
+                label="Best fasting day"
+                value={
+                  bestFastDay
+                    ? `${formatShortDate(bestFastDay.dayStart)} (${formatHours(bestFastDay.fastingHours)})`
+                    : 'No completed windows yet'
+                }
+              />
+              <InsightLine label="Current streak" value={`${streak} days`} />
+              <InsightLine label="Average calories" value={`${averageCalories} cal`} />
+              <InsightLine
+                label="Badges"
+                value={badges.length > 0 ? badges.join(', ') : 'No badges unlocked yet'}
+              />
+              {bestFastDay ? (
+                <View style={styles.focusCard}>
+                  <Text style={styles.focusTitle}>Best recent day</Text>
+                  <Text style={styles.focusValue}>{bestFastDay.label}</Text>
+                  <ProgressBar
+                    progress={
+                      bestFastDay.fastingHours /
+                      Math.max(settings.defaultFastGoalHours, 1)
+                    }
+                    accent={palette.purple}
+                  />
+                </View>
+              ) : null}
+            </View>
 
-        <SectionCard
-          title="Momentum Notes"
-          subtitle="Readable takeaways from the current data set."
-          style={styles.flexCard}
-        >
-          <View style={styles.noteList}>
-            <InsightLine
-              label="Best fasting day"
-              value={
-                bestFastDay
-                  ? `${bestFastDay.label} (${formatHours(bestFastDay.fastingHours)})`
-                  : 'No completed windows yet'
-              }
-            />
-            <InsightLine
-              label="Water consistency"
-              value={`${waterGoalHitDays} of the last 7 days hit ${formatMl(settings.dailyWaterGoalMl)}`}
-            />
-            <InsightLine
-              label="Weekly campaign"
-              value={`${weeklyCompletion} completed windows so far this week`}
-            />
-            <InsightLine
-              label="Latest badge set"
-              value={badges.length > 0 ? badges.join(', ') : 'No badges unlocked yet'}
-            />
-            {bestFastDay ? (
-              <View style={styles.focusCard}>
-                <Text style={styles.focusTitle}>Best recent day</Text>
-                <Text style={styles.focusValue}>{formatShortDate(bestFastDay.dayStart)}</Text>
-                <ProgressBar
-                  progress={bestFastDay.fastingHours / Math.max(settings.defaultFastGoalHours, 1)}
-                  accent={palette.purple}
-                />
+            {!isCompact ? (
+              <View style={styles.chartColumn}>
+                <View style={styles.chartHeader}>
+                  <View style={styles.chartModeRow}>
+                    <ChipButton
+                      label="Fasting"
+                      onPress={() => setChartMode('fasting')}
+                      selected={chartMode === 'fasting'}
+                      accent={palette.amber}
+                    />
+                    <ChipButton
+                      label="Water"
+                      onPress={() => setChartMode('water')}
+                      selected={chartMode === 'water'}
+                      accent={palette.teal}
+                    />
+                    <ChipButton
+                      label="Calories"
+                      onPress={() => setChartMode('calories')}
+                      selected={chartMode === 'calories'}
+                      accent={palette.cyan}
+                    />
+                  </View>
+                  <Text style={styles.chartSummary}>{chartConfig.summary}</Text>
+                </View>
+
+                {chartData.length === 0 ? (
+                  <EmptyState text="Log a few days of data to populate your first compact trend view." />
+                ) : (
+                  <BarChart
+                    data={chartData}
+                    accessor={chartConfig.accessor}
+                    formatter={chartConfig.formatter}
+                    accent={chartConfig.accent}
+                  />
+                )}
               </View>
             ) : null}
           </View>
-        </SectionCard>
-      </View>
+        ) : null}
+
+        {isCompact && compactPanel === 'trend' ? (
+          <View style={styles.chartColumn}>
+            <View style={styles.chartHeader}>
+              <View style={styles.chartModeRow}>
+                <ChipButton
+                  label="Fasting"
+                  onPress={() => setChartMode('fasting')}
+                  selected={chartMode === 'fasting'}
+                  accent={palette.amber}
+                />
+                <ChipButton
+                  label="Water"
+                  onPress={() => setChartMode('water')}
+                  selected={chartMode === 'water'}
+                  accent={palette.teal}
+                />
+                <ChipButton
+                  label="Calories"
+                  onPress={() => setChartMode('calories')}
+                  selected={chartMode === 'calories'}
+                  accent={palette.cyan}
+                />
+              </View>
+              <Text style={styles.chartSummary}>{chartConfig.summary}</Text>
+            </View>
+
+            {chartData.length === 0 ? (
+              <EmptyState text="Log a few days of data to populate your first compact trend view." />
+            ) : (
+              <BarChart
+                data={chartData}
+                accessor={chartConfig.accessor}
+                formatter={chartConfig.formatter}
+                accent={chartConfig.accent}
+              />
+            )}
+          </View>
+        ) : null}
+      </SectionCard>
     </View>
   );
 };
 
-const InsightLine = ({ label, value }: { label: string; value: string }) => (
-  <InsightLineInner label={label} value={value} />
-);
+const InsightStat = ({ value, label }: { value: string; label: string }) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
 
-const InsightLineInner = ({ label, value }: { label: string; value: string }) => {
+  return (
+    <View style={styles.metricTile}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>
+  );
+};
+
+const InsightLine = ({ label, value }: { label: string; value: string }) => {
   const { theme: palette } = useTheme();
   const styles = useMemo(() => createStyles(palette), [palette]);
 
@@ -221,96 +290,151 @@ const BarChart = ({
   );
 };
 
-const createStyles = (palette: ThemePalette) => StyleSheet.create({
-  wrap: {
-    gap: 20,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  grid: {
-    gap: 20,
-  },
-  gridWide: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  flexCard: {
-    flex: 1,
-  },
-  chartWrap: {
-    paddingTop: 6,
-  },
-  chartBars: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 10,
-    minHeight: 220,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-  },
-  barValue: {
-    color: palette.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  barTrack: {
-    width: '100%',
-    maxWidth: 42,
-    height: 160,
-    borderRadius: 999,
-    backgroundColor: palette.track,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 999,
-  },
-  barLabel: {
-    color: palette.text,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  noteList: {
-    gap: 12,
-  },
-  insightRow: {
-    gap: 5,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.borderSoft,
-  },
-  insightLabel: {
-    color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  insightValue: {
-    color: palette.text,
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  focusCard: {
-    padding: 16,
-    borderRadius: 22,
-    backgroundColor: palette.surfaceStrong,
-    gap: 8,
-  },
-  focusTitle: {
-    color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  focusValue: {
-    color: palette.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-});
+const createStyles = (palette: ThemePalette) =>
+  StyleSheet.create({
+    wrap: {
+      flex: 1,
+      minHeight: 0,
+    },
+    boardCard: {
+      flex: 1,
+      minHeight: 0,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    metricTile: {
+      flexGrow: 1,
+      minWidth: 140,
+      padding: 14,
+      borderRadius: 20,
+      backgroundColor: palette.surfaceMuted,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
+      gap: 4,
+    },
+    metricValue: {
+      color: palette.textStrong,
+      fontSize: 20,
+      lineHeight: 24,
+      fontWeight: '900',
+    },
+    metricLabel: {
+      color: palette.textMuted,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '700',
+    },
+    panelSwitchRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    boardRow: {
+      gap: 16,
+    },
+    boardRowWide: {
+      flex: 1,
+      flexDirection: 'row',
+      minHeight: 0,
+    },
+    noteColumn: {
+      flex: 0.38,
+      gap: 10,
+      minHeight: 0,
+    },
+    chartColumn: {
+      flex: 0.62,
+      gap: 12,
+      minHeight: 0,
+    },
+    chartHeader: {
+      gap: 10,
+    },
+    chartModeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    chartSummary: {
+      color: palette.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    insightRow: {
+      gap: 4,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.borderSoft,
+    },
+    insightLabel: {
+      color: palette.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    insightValue: {
+      color: palette.text,
+      fontSize: 14,
+      lineHeight: 19,
+    },
+    focusCard: {
+      padding: 14,
+      borderRadius: 20,
+      backgroundColor: palette.surfaceMuted,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
+      gap: 8,
+    },
+    focusTitle: {
+      color: palette.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    focusValue: {
+      color: palette.textStrong,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    chartWrap: {
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 0,
+    },
+    chartBars: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 10,
+      minHeight: 220,
+    },
+    barColumn: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 8,
+    },
+    barValue: {
+      color: palette.textMuted,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    barTrack: {
+      width: '100%',
+      maxWidth: 36,
+      height: 158,
+      borderRadius: 999,
+      backgroundColor: palette.track,
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
+    },
+    barFill: {
+      width: '100%',
+      borderRadius: 999,
+    },
+    barLabel: {
+      color: palette.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+  });

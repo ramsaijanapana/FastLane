@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 
 import {
+  DEFAULT_SETTINGS,
   DEFAULT_STATE,
   LEGACY_STORAGE_KEY,
   STORAGE_KEY,
   XP_PER_LEVEL,
 } from './constants';
-import { ActionButton, ChipButton, ProgressBar, SectionCard } from './components/ui';
+import { ActionButton, ChipButton, ProgressBar } from './components/ui';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
 import { JournalScreen } from './screens/JournalScreen';
@@ -28,7 +29,6 @@ import type {
   AuthSession,
   SocialAuthProvider,
   TabKey,
-  ThemeKey,
   UserSettings,
 } from './types';
 import {
@@ -95,8 +95,36 @@ const getAuthIdentity = (session: AuthSession) => {
   return session.email;
 };
 
+const hasMeaningfulState = (state: AppState) =>
+  Boolean(state.activeFast) ||
+  state.fastHistory.length > 0 ||
+  state.meals.length > 0 ||
+  state.waterEntries.length > 0 ||
+  state.xp > 0 ||
+  state.settings.displayName !== DEFAULT_SETTINGS.displayName ||
+  state.settings.defaultFastGoalHours !== DEFAULT_SETTINGS.defaultFastGoalHours ||
+  state.settings.dailyWaterGoalMl !== DEFAULT_SETTINGS.dailyWaterGoalMl ||
+  state.settings.dailyCalorieGoal !== DEFAULT_SETTINGS.dailyCalorieGoal ||
+  state.settings.weeklyFastGoal !== DEFAULT_SETTINGS.weeklyFastGoal ||
+  state.settings.coachingTone !== DEFAULT_SETTINGS.coachingTone ||
+  state.settings.themeKey !== DEFAULT_SETTINGS.themeKey ||
+  state.settings.remindersEnabled !== DEFAULT_SETTINGS.remindersEnabled ||
+  state.settings.reminderHour !== DEFAULT_SETTINGS.reminderHour;
+
+const shouldUseRemoteState = (remoteState: AppState | null, localState: AppState) => {
+  if (!remoteState) {
+    return false;
+  }
+
+  if (hasMeaningfulState(remoteState) && !hasMeaningfulState(localState)) {
+    return true;
+  }
+
+  return remoteState.lastUpdatedAt > localState.lastUpdatedAt;
+};
+
 export const AppShell = () => {
-  const { theme: palette, setThemeKey } = useTheme();
+  const { theme: palette, themeKey, setThemeKey } = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 960;
   const styles = useMemo(() => createStyles(palette), [palette]);
@@ -203,9 +231,10 @@ export const AppShell = () => {
           return;
         }
 
-        if (remote.state && remote.state.lastUpdatedAt > appState.lastUpdatedAt) {
+        if (shouldUseRemoteState(remote.state, appState)) {
           const merged = migrateAppState(remote.state);
           setAppState(merged);
+          setThemeKey(merged.settings.themeKey);
           setSelectedTarget(
             merged.activeFast?.targetHours ?? merged.settings.defaultFastGoalHours,
           );
@@ -278,6 +307,9 @@ export const AppShell = () => {
     mealsToday,
     appState.settings.coachingTone,
   );
+  const currentThemeLabel =
+    themeOptions.find((option) => option.key === themeKey)?.label ??
+    'Theme';
 
   const handleSelectTarget = (hours: number) => {
     setSelectedTarget(hours);
@@ -494,19 +526,7 @@ export const AppShell = () => {
     pulseSuccess();
   };
 
-  const handleQuickTheme = (themeKey: ThemeKey) => {
-    setAppState((current) =>
-      stampState({
-        ...current,
-        settings: {
-          ...current.settings,
-          themeKey,
-        },
-      }),
-    );
-  };
-
-  const handleOpenQuestTab = (tab: TabKey) => {
+  const handleOpenDashboardTab = (tab: TabKey) => {
     setSelectedTab(tab);
   };
 
@@ -518,9 +538,10 @@ export const AppShell = () => {
     const remote = await pullRemoteState(session.token);
     const identity = getAuthIdentity(session);
 
-    if (remote.state && remote.state.lastUpdatedAt > appState.lastUpdatedAt) {
+    if (shouldUseRemoteState(remote.state, appState)) {
       const merged = migrateAppState(remote.state);
       setAppState(merged);
+      setThemeKey(merged.settings.themeKey);
       setSelectedTarget(
         merged.activeFast?.targetHours ?? merged.settings.defaultFastGoalHours,
       );
@@ -703,181 +724,159 @@ export const AppShell = () => {
         <View style={styles.backgroundGlowTertiary} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          !isCompact && styles.scrollContentWide,
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
+      <View style={[styles.shell, !isCompact && styles.shellWide]}>
+        <View style={[styles.chrome, !isCompact && styles.chromeWide]}>
+          <View style={styles.brandBlock}>
             <Text style={styles.eyebrow}>FASTLANE V1</Text>
-            <Text style={styles.title}>
-              {appState.settings.displayName}, your tracker now covers fasting, food, water, and weekly momentum.
-            </Text>
+            <Text style={styles.title}>Fastlane</Text>
             <Text style={styles.subtitle}>
-              Simple logging on the surface, stronger history and insights underneath.
+              Fasting, food, water, and weekly momentum in one window.
             </Text>
           </View>
 
-          <View style={styles.rankCard}>
-            <Text style={styles.rankLabel}>Level {level}</Text>
-            <Text style={styles.rankTitle}>{getRankTitle(level)}</Text>
-            <ProgressBar progress={nextLevelProgress} />
-            <Text style={styles.rankMeta}>{appState.xp} XP total</Text>
+          <View style={styles.chromeActions}>
+            <View style={styles.statusGroup}>
+              <View style={styles.statusPill}>
+                <Text style={styles.statusPillText}>
+                  {authSession ? 'Cloud On' : 'Offline'}
+                </Text>
+              </View>
+              <View style={styles.themePill}>
+                <Text style={styles.themePillText}>{currentThemeLabel}</Text>
+              </View>
+              <ActionButton
+                label={authSession ? 'Account' : 'Sign In'}
+                onPress={() => setSelectedTab('settings')}
+                tone="secondary"
+              />
+            </View>
+
+            <View style={styles.rankCard}>
+              <Text style={styles.rankLabel}>Level {level}</Text>
+              <Text style={styles.rankTitle}>{getRankTitle(level)}</Text>
+              <ProgressBar progress={nextLevelProgress} />
+              <Text style={styles.rankMeta}>{appState.xp} XP total</Text>
+            </View>
           </View>
         </View>
 
-        <SectionCard
-          title={authSession ? 'Cloud Sync Connected' : 'Sign In For Sync'}
-          subtitle={
-            authSession
-              ? `Signed in as ${getAuthIdentity(authSession)}. Open Account to manage sync, backup, and settings.`
-              : 'Use Google, Facebook, or email and password. The app still works offline if you skip sign-in.'
-          }
-          style={styles.authCard}
-        >
-          <View style={styles.authCardRow}>
-            {authSession ? (
-              <>
-                <ActionButton
-                  label="Open Account"
-                  onPress={() => setSelectedTab('settings')}
-                  tone="secondary"
-                />
+        <View style={[styles.toolbar, !isCompact && styles.toolbarWide]}>
+          <View style={styles.tabRow}>
+            {tabs.map((tab) => (
+              <ChipButton
+                key={tab.key}
+                label={tab.label}
+                onPress={() => setSelectedTab(tab.key)}
+                selected={selectedTab === tab.key}
+                accent={palette.amber}
+              />
+            ))}
+          </View>
+
+          <View style={styles.toolbarMeta}>
+            <Text numberOfLines={1} style={styles.toolbarStatus}>
+              {syncStatus}
+            </Text>
+            <View style={styles.toolbarActionRow}>
+              {!authSession ? (
+                <>
+                  <ActionButton
+                    label={authBusy ? 'Opening...' : 'Google'}
+                    onPress={() => handleSocialLogin('google')}
+                    disabled={authBusy}
+                  />
+                  <ActionButton
+                    label={authBusy ? 'Opening...' : 'Facebook'}
+                    onPress={() => handleSocialLogin('facebook')}
+                    tone="secondary"
+                    disabled={authBusy}
+                  />
+                </>
+              ) : (
                 <ActionButton
                   label={authBusy ? 'Syncing...' : 'Push Sync'}
                   onPress={handlePushSync}
                   disabled={authBusy}
                 />
-              </>
-            ) : (
-              <>
-                <ActionButton
-                  label={authBusy ? 'Opening...' : 'Google'}
-                  onPress={() => handleSocialLogin('google')}
-                  disabled={authBusy}
-                />
-                <ActionButton
-                  label={authBusy ? 'Opening...' : 'Facebook'}
-                  onPress={() => handleSocialLogin('facebook')}
-                  tone="secondary"
-                  disabled={authBusy}
-                />
-                <ActionButton
-                  label="Email & Password"
-                  onPress={() => setSelectedTab('settings')}
-                  tone="secondary"
-                />
-              </>
-            )}
+              )}
+            </View>
           </View>
-          <Text style={styles.authCardMeta}>{syncStatus}</Text>
-        </SectionCard>
-
-        <View style={styles.tabRow}>
-          {tabs.map((tab) => (
-            <ChipButton
-              key={tab.key}
-              label={tab.label}
-              onPress={() => setSelectedTab(tab.key)}
-              selected={selectedTab === tab.key}
-              accent={palette.amber}
-            />
-          ))}
         </View>
 
-        <SectionCard
-          title="Theme"
-          subtitle="Switch appearance instantly. Dark, light, and extra visual themes are available."
-          style={styles.themeCard}
-        >
-          <View style={styles.themeQuickRow}>
-            {themeOptions.map((option) => (
-              <ChipButton
-                key={option.key}
-                label={option.label}
-                onPress={() => handleQuickTheme(option.key)}
-                selected={appState.settings.themeKey === option.key}
-                accent={option.swatches[0]}
+        <View style={styles.contentViewport}>
+          {selectedTab === 'dashboard' ? (
+            <DashboardScreen
+              activeFast={activeFast}
+              now={now}
+              selectedTarget={selectedTarget}
+              currentStage={currentStage}
+              encouragement={encouragement}
+              streak={streak}
+              mealsTodayCount={mealsToday.length}
+              caloriesToday={caloriesToday}
+              waterTodayMl={waterTodayMl}
+              settings={appState.settings}
+              quests={quests}
+              badges={badges}
+              weeklyCompletion={weeklyCompletion}
+              completedTodayTarget={completedTodayTarget}
+              fastHistory={appState.fastHistory}
+              isCompact={isCompact}
+              onSelectTarget={handleSelectTarget}
+              onStartFast={handleStartFast}
+              onFinishFast={handleFinishFast}
+              onAddWater={handleAddWater}
+              onOpenTab={handleOpenDashboardTab}
+            />
+          ) : selectedTab === 'journal' ? (
+            <ScrollView
+              style={styles.secondaryScreenViewport}
+              contentContainerStyle={styles.secondaryScreenContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <JournalScreen
+                activeFast={activeFast}
+                meals={appState.meals}
+                fastHistory={appState.fastHistory}
+                waterEntries={appState.waterEntries}
+                onAddMeal={handleAddMeal}
+                onUpdateMeal={handleUpdateMeal}
+                onDeleteMeal={handleDeleteMeal}
+                onAddWater={handleAddWater}
+                onDeleteWater={handleDeleteWater}
+                onUpdateFast={handleUpdateFast}
+                onDeleteFast={handleDeleteFast}
               />
-            ))}
-          </View>
-        </SectionCard>
-
-        {selectedTab === 'dashboard' ? (
-          <DashboardScreen
-            activeFast={activeFast}
-            now={now}
-            selectedTarget={selectedTarget}
-            currentStage={currentStage}
-            encouragement={encouragement}
-            streak={streak}
-            mealsTodayCount={mealsToday.length}
-            caloriesToday={caloriesToday}
-            waterTodayMl={waterTodayMl}
-            settings={appState.settings}
-            quests={quests}
-            badges={badges}
-            weeklyCompletion={weeklyCompletion}
-            completedTodayTarget={completedTodayTarget}
-            fastHistory={appState.fastHistory}
-            isCompact={isCompact}
-            onSelectTarget={handleSelectTarget}
-            onStartFast={handleStartFast}
-            onFinishFast={handleFinishFast}
-            onAddWater={handleAddWater}
-            onOpenQuestTab={handleOpenQuestTab}
-          />
-        ) : null}
-
-        {selectedTab === 'journal' ? (
-          <JournalScreen
-            activeFast={activeFast}
-            meals={appState.meals}
-            fastHistory={appState.fastHistory}
-            waterEntries={appState.waterEntries}
-            onAddMeal={handleAddMeal}
-            onUpdateMeal={handleUpdateMeal}
-            onDeleteMeal={handleDeleteMeal}
-            onAddWater={handleAddWater}
-            onDeleteWater={handleDeleteWater}
-            onUpdateFast={handleUpdateFast}
-            onDeleteFast={handleDeleteFast}
-          />
-        ) : null}
-
-        {selectedTab === 'insights' ? (
-          <InsightsScreen
-            chartData={chartData}
-            longestFastHours={longestFastHours}
-            averageFastHours={averageFastHours}
-            streak={streak}
-            weeklyCompletion={weeklyCompletion}
-            settings={appState.settings}
-            badges={badges}
-          />
-        ) : null}
-
-        {selectedTab === 'settings' ? (
-          <SettingsScreen
-            settings={appState.settings}
-            authSession={authSession}
-            authBusy={authBusy}
-            syncStatus={syncStatus}
-            onRegister={handleRegister}
-            onLogin={handleLogin}
-            onSocialLogin={handleSocialLogin}
-            onLogout={handleLogout}
-            onPushSync={handlePushSync}
-            onPullSync={handlePullSync}
-            onExportBackup={handleExportBackup}
-            onImportBackup={handleImportBackup}
-            onSaveSettings={handleSaveSettings}
-          />
-        ) : null}
-      </ScrollView>
+            </ScrollView>
+          ) : selectedTab === 'insights' ? (
+            <InsightsScreen
+              chartData={chartData}
+              longestFastHours={longestFastHours}
+              averageFastHours={averageFastHours}
+              streak={streak}
+              weeklyCompletion={weeklyCompletion}
+              settings={appState.settings}
+              badges={badges}
+            />
+          ) : (
+            <SettingsScreen
+              settings={appState.settings}
+              authSession={authSession}
+              authBusy={authBusy}
+              syncStatus={syncStatus}
+              onRegister={handleRegister}
+              onLogin={handleLogin}
+              onSocialLogin={handleSocialLogin}
+              onLogout={handleLogout}
+              onPushSync={handlePushSync}
+              onPullSync={handlePullSync}
+              onExportBackup={handleExportBackup}
+              onImportBackup={handleImportBackup}
+              onSaveSettings={handleSaveSettings}
+            />
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -928,27 +927,32 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
     bottom: -40,
     left: 60,
   },
-  scrollContent: {
+  shell: {
+    flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 48,
-    gap: 20,
+    paddingBottom: 20,
+    gap: 16,
   },
-  scrollContentWide: {
+  shellWide: {
     alignSelf: 'center',
     width: '100%',
     maxWidth: 1220,
   },
-  header: {
+  chrome: {
+    gap: 14,
+  },
+  chromeWide: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 20,
   },
-  headerCopy: {
-    maxWidth: 760,
-    gap: 10,
+  brandBlock: {
+    flex: 1,
+    minWidth: 220,
+    gap: 6,
   },
   eyebrow: {
     color: palette.amber,
@@ -958,64 +962,121 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
   },
   title: {
     color: palette.text,
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
   },
   subtitle: {
     color: palette.textSoft,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  rankCard: {
-    minWidth: 220,
-    padding: 18,
-    borderRadius: 24,
+  chromeActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     backgroundColor: palette.surfaceStrong,
     borderWidth: 1,
-    borderColor: palette.border,
-    gap: 10,
+    borderColor: palette.borderSoft,
+  },
+  statusPillText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  themePill: {
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: palette.surfaceStrong,
+    borderWidth: 1,
+    borderColor: palette.borderSoft,
+  },
+  themePillText: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rankCard: {
+    minWidth: 188,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: palette.surfaceStrong,
+    borderWidth: 1,
+    borderColor: palette.borderSoft,
+    gap: 8,
   },
   rankLabel: {
     color: palette.amberSoft,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1.3,
+    letterSpacing: 1.1,
   },
   rankTitle: {
     color: palette.textStrong,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
   },
   rankMeta: {
     color: palette.textMuted,
-    fontSize: 13,
+    fontSize: 12,
   },
-  authCard: {
-    backgroundColor: palette.surface,
-  },
-  authCardRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  toolbar: {
     gap: 10,
   },
-  authCardMeta: {
-    color: palette.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
+  toolbarWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
   },
   tabRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
-  themeCard: {
-    backgroundColor: palette.surface,
+  toolbarMeta: {
+    flex: 1,
+    minWidth: 220,
+    gap: 8,
+    alignItems: 'flex-end',
   },
-  themeQuickRow: {
+  toolbarStatus: {
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+  toolbarActionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  contentViewport: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  secondaryScreenViewport: {
+    flex: 1,
+    minHeight: 0,
+  },
+  secondaryScreenContent: {
+    paddingBottom: 20,
   },
 });

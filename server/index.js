@@ -49,6 +49,10 @@ const DEFAULT_DEV_ORIGINS = [
   'http://127.0.0.1:19006',
   'http://localhost:8081',
   'http://127.0.0.1:8081',
+  'http://localhost:4000',
+  'http://127.0.0.1:4000',
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
 ];
 const ALLOWED_WEB_ORIGINS = (() => {
   const configured = parseList(process.env.ALLOWED_WEB_ORIGINS);
@@ -293,12 +297,30 @@ const sanitizeState = (state) => {
   };
 };
 
+const isLoopbackOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+
+    return ['localhost', '127.0.0.1'].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+};
+
 const isAllowedOrigin = (origin) => {
   if (!origin) {
     return true;
   }
 
-  return ALLOWED_WEB_ORIGINS.includes(origin);
+  if (ALLOWED_WEB_ORIGINS.includes(origin)) {
+    return true;
+  }
+
+  if (!IS_PRODUCTION && isLoopbackOrigin(origin)) {
+    return true;
+  }
+
+  return false;
 };
 
 const isAllowedClientRedirect = (redirectUri) => {
