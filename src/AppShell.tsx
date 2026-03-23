@@ -375,6 +375,23 @@ export const AppShell = () => {
     pulseSuccess();
   };
 
+  const handleUpdateActiveFastStartTime = (startTime: number) => {
+    setAppState((current) => {
+      if (!current.activeFast) {
+        return current;
+      }
+
+      return stampState({
+        ...current,
+        activeFast: {
+          ...current.activeFast,
+          startTime,
+        },
+      });
+    });
+    pulsePrimary();
+  };
+
   const handleAddMeal = (draft: MealDraft) => {
     const timestamp = Date.now();
 
@@ -825,6 +842,7 @@ export const AppShell = () => {
               onSelectTarget={handleSelectTarget}
               onStartFast={handleStartFast}
               onFinishFast={handleFinishFast}
+              onUpdateActiveFastStartTime={handleUpdateActiveFastStartTime}
               onAddWater={handleAddWater}
               onOpenTab={handleOpenDashboardTab}
             />

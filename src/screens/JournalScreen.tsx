@@ -6,8 +6,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
 
 import { TARGET_OPTIONS, WATER_PRESETS } from '../constants';
+import { getMealPrefillFromScan } from '../services/foodLookup';
 import { ThemePalette, useTheme } from '../theme';
 import type { FastSession, MealEntry, WaterEntry } from '../types';
 import {
@@ -64,11 +66,15 @@ export const JournalScreen = ({
   const styles = useMemo(() => createStyles(palette), [palette]);
   const { width } = useWindowDimensions();
   const isCompact = width < 1020;
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [mealName, setMealName] = useState('');
   const [mealCalories, setMealCalories] = useState('');
   const [mealNote, setMealNote] = useState('');
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerBusy, setScannerBusy] = useState(false);
+  const [scannerStatus, setScannerStatus] = useState('');
   const [customWater, setCustomWater] = useState('');
   const [editingFastId, setEditingFastId] = useState<string | null>(null);
   const [fastDuration, setFastDuration] = useState('');
@@ -123,6 +129,45 @@ export const JournalScreen = ({
     setMealNote(meal.note ?? '');
   };
 
+  const handleOpenScanner = async () => {
+    setScannerStatus('');
+
+    if (!cameraPermission?.granted) {
+      const permission = await requestCameraPermission();
+
+      if (!permission.granted) {
+        setScannerStatus('Camera permission is required to scan food and drink codes.');
+        return;
+      }
+    }
+
+    setScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
+    if (scannerBusy) {
+      return;
+    }
+
+    setScannerBusy(true);
+
+    try {
+      const prefill = await getMealPrefillFromScan(result.data, result.type);
+
+      setMealName(prefill.name);
+      setMealCalories(
+        typeof prefill.calories === 'number' ? String(prefill.calories) : '',
+      );
+      setMealNote(prefill.note ?? '');
+      setScannerStatus('Scan captured. Review the meal details, then save.');
+      setScannerOpen(false);
+    } catch (error) {
+      setScannerStatus(`Unable to read that code: ${String(error)}`);
+    } finally {
+      setScannerBusy(false);
+    }
+  };
+
   const handleFastSave = () => {
     if (!editingFastId) {
       return;
@@ -173,6 +218,71 @@ export const JournalScreen = ({
                 : 'Track meals quickly and keep the friction low.'
             }
           >
+            <View style={styles.scanActionRow}>
+              <ActionButton
+                label={scannerOpen ? 'Close Scanner' : 'Scan Food / Drink Code'}
+                onPress={() => {
+                  if (scannerOpen) {
+                    setScannerOpen(false);
+                    setScannerStatus('');
+                    return;
+                  }
+
+                  void handleOpenScanner();
+                }}
+                tone="secondary"
+              />
+              {scannerOpen ? (
+                <ActionButton
+                  label={scannerBusy ? 'Scanning...' : 'Ready To Scan'}
+                  onPress={() => undefined}
+                  disabled
+                />
+              ) : null}
+            </View>
+            {scannerStatus ? <Text style={styles.scanStatus}>{scannerStatus}</Text> : null}
+            {scannerOpen ? (
+              <View style={styles.scannerPanel}>
+                {cameraPermission?.granted ? (
+                  <>
+                    <CameraView
+                      style={styles.scannerCamera}
+                      facing="back"
+                      barcodeScannerSettings={{
+                        barcodeTypes: [
+                          'qr',
+                          'ean13',
+                          'ean8',
+                          'upc_a',
+                          'upc_e',
+                          'code128',
+                          'code39',
+                          'datamatrix',
+                          'pdf417',
+                        ],
+                      }}
+                      onBarcodeScanned={scannerBusy ? undefined : handleBarcodeScanned}
+                    />
+                    <Text style={styles.scanHint}>
+                      Center the package QR or barcode inside the frame. Known product
+                      codes try a free lookup first, then fall back to the raw scan text.
+                    </Text>
+                  </>
+                ) : (
+                  <View style={styles.scannerFallback}>
+                    <Text style={styles.scanHint}>
+                      Camera access is needed before the scanner can open.
+                    </Text>
+                    <ActionButton
+                      label="Grant Camera Access"
+                      onPress={() => {
+                        void handleOpenScanner();
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
+            ) : null}
             <View style={styles.quickRow}>
               {['Protein bowl', 'Salad wrap', 'Eggs + toast', 'Fruit snack'].map(
                 (template) => (
@@ -406,6 +516,40 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  scanActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  scanStatus: {
+    color: palette.amberSoft,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  scannerPanel: {
+    gap: 10,
+    padding: 12,
+    borderRadius: 22,
+    backgroundColor: palette.surfaceMuted,
+    borderWidth: 1,
+    borderColor: palette.borderSoft,
+  },
+  scannerCamera: {
+    width: '100%',
+    aspectRatio: 1.15,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: palette.backgroundAlt,
+  },
+  scannerFallback: {
+    gap: 10,
+  },
+  scanHint: {
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
   },
   input: {
     minHeight: 52,

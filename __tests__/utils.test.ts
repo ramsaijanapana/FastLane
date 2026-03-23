@@ -1,5 +1,12 @@
 import { DEFAULT_SETTINGS } from '../src/constants';
-import { calculateStreak, getDailySummaries, migrateAppState } from '../src/utils';
+import {
+  calculateStreak,
+  formatDateInputValue,
+  formatTimeInputValue,
+  getDailySummaries,
+  migrateAppState,
+  parseLocalDateTime,
+} from '../src/utils';
 
 describe('migrateAppState', () => {
   it('fills in new v1 defaults when loading older state shapes', () => {
@@ -68,5 +75,24 @@ describe('getDailySummaries', () => {
     expect(latestDay.calories).toBe(700);
     expect(latestDay.waterMl).toBe(500);
     expect(latestDay.fastingHours).toBeGreaterThan(15);
+  });
+});
+
+describe('parseLocalDateTime', () => {
+  it('round-trips local date and time inputs', () => {
+    const timestamp = new Date(2026, 2, 23, 14, 45, 0, 0).getTime();
+
+    expect(
+      parseLocalDateTime(
+        formatDateInputValue(timestamp),
+        formatTimeInputValue(timestamp),
+      ),
+    ).toBe(timestamp);
+  });
+
+  it('rejects impossible values', () => {
+    expect(parseLocalDateTime('2026-02-31', '08:00')).toBeNull();
+    expect(parseLocalDateTime('2026-03-23', '25:10')).toBeNull();
+    expect(parseLocalDateTime('bad-date', '09:00')).toBeNull();
   });
 });

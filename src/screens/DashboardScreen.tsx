@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
   StyleProp,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -23,11 +24,15 @@ import type {
 } from '../types';
 import {
   clamp,
+  formatClock,
+  formatDateInputValue,
   formatDuration,
   formatHours,
   formatMl,
   formatShortDate,
+  formatTimeInputValue,
   getCompletedFastHours,
+  parseLocalDateTime,
 } from '../utils';
 import {
   ActionButton,
@@ -57,6 +62,7 @@ type DashboardScreenProps = {
   onSelectTarget: (hours: number) => void;
   onStartFast: () => void;
   onFinishFast: () => void;
+  onUpdateActiveFastStartTime: (timestamp: number) => void;
   onAddWater: (amountMl: number) => void;
   onOpenTab: (tab: TabKey) => void;
 };
@@ -122,6 +128,7 @@ export const DashboardScreen = ({
   onSelectTarget,
   onStartFast,
   onFinishFast,
+  onUpdateActiveFastStartTime,
   onAddWater,
   onOpenTab,
 }: DashboardScreenProps) => {
@@ -168,6 +175,10 @@ export const DashboardScreen = ({
   const [hoveredStageIndex, setHoveredStageIndex] = useState<number | null>(null);
   const [pinnedStageIndex, setPinnedStageIndex] = useState<number | null>(null);
   const [activeWindow, setActiveWindow] = useState<DashboardWindow>('home');
+  const [showStartEditor, setShowStartEditor] = useState(false);
+  const [startDateInput, setStartDateInput] = useState('');
+  const [startTimeInput, setStartTimeInput] = useState('');
+  const [startEditorStatus, setStartEditorStatus] = useState('');
   const detailStageIndex =
     hoveredStageIndex ?? pinnedStageIndex ?? (activeFast ? currentStageIndex : previewStageIndex);
   const detailStage = FASTING_STAGES[detailStageIndex] ?? FASTING_STAGES[0];
@@ -242,6 +253,43 @@ export const DashboardScreen = ({
   const recentWindowSummary =
     fastHistory.length > 0 ? formatHours(getCompletedFastHours(fastHistory[0])) : 'No logs';
 
+  useEffect(() => {
+    if (!activeFast) {
+      setShowStartEditor(false);
+      setStartDateInput('');
+      setStartTimeInput('');
+      setStartEditorStatus('');
+      return;
+    }
+
+    setStartDateInput(formatDateInputValue(activeFast.startTime));
+    setStartTimeInput(formatTimeInputValue(activeFast.startTime));
+    setStartEditorStatus('');
+  }, [activeFast]);
+
+  const handleStartEditorSave = () => {
+    const parsedStartTime = parseLocalDateTime(startDateInput, startTimeInput);
+
+    if (!parsedStartTime) {
+      setStartEditorStatus('Use YYYY-MM-DD and HH:MM to adjust the start.');
+      return;
+    }
+
+    if (parsedStartTime >= now) {
+      setStartEditorStatus('Start time must be earlier than the current time.');
+      return;
+    }
+
+    if (now - parsedStartTime > 14 * 24 * 3600000) {
+      setStartEditorStatus('Keep the adjustment within the last 14 days.');
+      return;
+    }
+
+    onUpdateActiveFastStartTime(parsedStartTime);
+    setStartEditorStatus('Fast start updated.');
+    setShowStartEditor(false);
+  };
+
   return (
     <View style={styles.wrap}>
       {activeWindow === 'home' ? (
@@ -261,6 +309,12 @@ export const DashboardScreen = ({
               <Text style={styles.timerMeta}>
                 {activeFast ? `${currentStage.title} stage` : 'Pick a window and start when ready'}
               </Text>
+              {activeFast ? (
+                <Text style={styles.startMeta}>
+                  Started {formatShortDate(activeFast.startTime)} at{' '}
+                  {formatClock(activeFast.startTime)}
+                </Text>
+              ) : null}
               <ProgressBar progress={fastProgress} height={16} />
               <Text style={styles.helperText}>{encouragement}</Text>
               <View style={styles.actionsRow}>
@@ -275,7 +329,64 @@ export const DashboardScreen = ({
                   tone="secondary"
                   disabled={!activeFast}
                 />
+                {activeFast ? (
+                  <ActionButton
+                    label={showStartEditor ? 'Hide Start Edit' : 'Edit Start'}
+                    onPress={() => {
+                      setShowStartEditor((current) => !current);
+                      setStartEditorStatus('');
+                    }}
+                    tone="secondary"
+                  />
+                ) : null}
               </View>
+              {activeFast && showStartEditor ? (
+                <View style={styles.startEditor}>
+                  <Text style={styles.startEditorTitle}>
+                    Forgot to start earlier? Adjust the live fast here.
+                  </Text>
+                  <View style={styles.startEditorRow}>
+                    <TextInput
+                      value={startDateInput}
+                      onChangeText={setStartDateInput}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={palette.textMuted}
+                      autoCapitalize="none"
+                      style={[styles.startEditorInput, styles.startEditorInputWide]}
+                    />
+                    <TextInput
+                      value={startTimeInput}
+                      onChangeText={setStartTimeInput}
+                      placeholder="HH:MM"
+                      placeholderTextColor={palette.textMuted}
+                      autoCapitalize="none"
+                      style={styles.startEditorInput}
+                    />
+                  </View>
+                  <View style={styles.startEditorActionRow}>
+                    <ActionButton label="Apply Start Time" onPress={handleStartEditorSave} />
+                    <ActionButton
+                      label="Reset"
+                      onPress={() => {
+                        if (!activeFast) {
+                          return;
+                        }
+
+                        setStartDateInput(formatDateInputValue(activeFast.startTime));
+                        setStartTimeInput(formatTimeInputValue(activeFast.startTime));
+                        setStartEditorStatus('');
+                      }}
+                      tone="secondary"
+                    />
+                  </View>
+                  <Text style={styles.startEditorHint}>
+                    Use your local time. The running timer and stage ring update immediately.
+                  </Text>
+                  {startEditorStatus ? (
+                    <Text style={styles.startEditorStatus}>{startEditorStatus}</Text>
+                  ) : null}
+                </View>
+              ) : null}
               <View style={styles.quickActionRow}>
                 <ActionButton
                   label="Log Meal"
@@ -849,6 +960,12 @@ const createStyles = (palette: ThemePalette) =>
       color: palette.textSoft,
       fontSize: 16,
     },
+    startMeta: {
+      color: palette.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: -2,
+    },
     helperText: {
       color: palette.textSoft,
       fontSize: 15,
@@ -859,6 +976,56 @@ const createStyles = (palette: ThemePalette) =>
       flexWrap: 'wrap',
       gap: 12,
       marginTop: 6,
+    },
+    startEditor: {
+      gap: 10,
+      padding: 14,
+      borderRadius: 22,
+      backgroundColor: palette.surfaceMuted,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
+    },
+    startEditorTitle: {
+      color: palette.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    startEditorRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    startEditorInput: {
+      minWidth: 120,
+      minHeight: 48,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: palette.text,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.track,
+      fontSize: 14,
+    },
+    startEditorInputWide: {
+      flexGrow: 1,
+      minWidth: 168,
+    },
+    startEditorActionRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    startEditorHint: {
+      color: palette.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    startEditorStatus: {
+      color: palette.amberSoft,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '700',
     },
     quickActionRow: {
       flexDirection: 'row',
