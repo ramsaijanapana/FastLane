@@ -9,6 +9,7 @@ import {
 import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
 
 import { TARGET_OPTIONS, WATER_PRESETS } from '../constants';
+import { estimateMealFromWords } from '../services/foodEstimate';
 import { getMealPrefillFromScan } from '../services/foodLookup';
 import { ThemePalette, useTheme } from '../theme';
 import type { FastSession, MealEntry, WaterEntry } from '../types';
@@ -72,6 +73,7 @@ export const JournalScreen = ({
   const [mealCalories, setMealCalories] = useState('');
   const [mealNote, setMealNote] = useState('');
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [mealAssistStatus, setMealAssistStatus] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerBusy, setScannerBusy] = useState(false);
   const [scannerStatus, setScannerStatus] = useState('');
@@ -86,6 +88,7 @@ export const JournalScreen = ({
     setMealName('');
     setMealCalories('');
     setMealNote('');
+    setMealAssistStatus('');
   };
 
   const clearFastForm = () => {
@@ -104,12 +107,23 @@ export const JournalScreen = ({
     }
 
     const parsedCalories = Number.parseInt(mealCalories, 10);
+    const estimatedMeal =
+      !Number.isFinite(parsedCalories) || parsedCalories <= 0
+        ? estimateMealFromWords(trimmedName)
+        : null;
 
     const draft = {
-      name: trimmedName,
-      calories: Number.isFinite(parsedCalories) ? parsedCalories : undefined,
-      note: trimmedNote || undefined,
+      name: estimatedMeal?.name ?? trimmedName,
+      calories:
+        Number.isFinite(parsedCalories) && parsedCalories > 0
+          ? parsedCalories
+          : estimatedMeal?.calories,
+      note: trimmedNote || estimatedMeal?.note || undefined,
     };
+
+    if (estimatedMeal && (!Number.isFinite(parsedCalories) || parsedCalories <= 0)) {
+      setMealAssistStatus(`Estimated ${estimatedMeal.calories} cal from your words.`);
+    }
 
     if (editingMealId) {
       onUpdateMeal(editingMealId, draft);
@@ -127,6 +141,23 @@ export const JournalScreen = ({
       typeof meal.calories === 'number' ? String(meal.calories) : '',
     );
     setMealNote(meal.note ?? '');
+    setMealAssistStatus('');
+  };
+
+  const handleEstimateMeal = () => {
+    const estimate = estimateMealFromWords(mealName);
+
+    if (!estimate) {
+      setMealAssistStatus(
+        "Couldn't confidently estimate that meal. You can still enter calories manually.",
+      );
+      return;
+    }
+
+    setMealName(estimate.name);
+    setMealCalories(String(estimate.calories));
+    setMealNote((current) => current.trim() || estimate.note);
+    setMealAssistStatus(`Estimated ${estimate.calories} cal from your words.`);
   };
 
   const handleOpenScanner = async () => {
@@ -159,6 +190,7 @@ export const JournalScreen = ({
         typeof prefill.calories === 'number' ? String(prefill.calories) : '',
       );
       setMealNote(prefill.note ?? '');
+      setMealAssistStatus('');
       setScannerStatus('Scan captured. Review the meal details, then save.');
       setScannerOpen(false);
     } catch (error) {
@@ -215,7 +247,7 @@ export const JournalScreen = ({
             subtitle={
               activeFast
                 ? 'Logging food closes the current fast automatically.'
-                : 'Track meals quickly and keep the friction low.'
+                : 'Track meals quickly, estimate plain-language entries, or scan packaged items.'
             }
           >
             <View style={styles.scanActionRow}>
@@ -294,6 +326,10 @@ export const JournalScreen = ({
                 ),
               )}
             </View>
+            <Text style={styles.assistHint}>
+              Type plain words like `2 eggs and toast` or `large latte`, then estimate
+              or log directly.
+            </Text>
             <TextInput
               value={mealName}
               onChangeText={setMealName}
@@ -319,6 +355,12 @@ export const JournalScreen = ({
             />
             <View style={styles.actionRow}>
               <ActionButton
+                label="Estimate From Words"
+                onPress={handleEstimateMeal}
+                tone="secondary"
+                disabled={!mealName.trim()}
+              />
+              <ActionButton
                 label={editingMealId ? 'Save Meal' : 'Log Food'}
                 onPress={handleMealSave}
                 disabled={!mealName.trim()}
@@ -327,6 +369,9 @@ export const JournalScreen = ({
                 <ActionButton label="Cancel" onPress={clearMealForm} tone="secondary" />
               ) : null}
             </View>
+            {mealAssistStatus ? (
+              <Text style={styles.mealAssistStatus}>{mealAssistStatus}</Text>
+            ) : null}
           </SectionCard>
 
           <SectionCard
@@ -550,6 +595,17 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
     color: palette.textMuted,
     fontSize: 12,
     lineHeight: 18,
+  },
+  assistHint: {
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  mealAssistStatus: {
+    color: palette.green,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
   },
   input: {
     minHeight: 52,
