@@ -8,3 +8,4 @@ web-build/
 *.log
 coverage/
 server/data/db.json
+artifacts/
