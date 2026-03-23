@@ -140,6 +140,10 @@ export const getCompletedFastHours = (session: FastSession) => {
 };
 
 export const getStageForHours = (elapsedHours: number): FastingStage => {
+  if (elapsedHours <= FASTING_STAGES[0].startHour) {
+    return FASTING_STAGES[0];
+  }
+
   const match = FASTING_STAGES.find(
     (stage) => elapsedHours >= stage.startHour && elapsedHours < stage.endHour,
   );

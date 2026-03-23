@@ -4,6 +4,7 @@ import {
   formatDateInputValue,
   formatTimeInputValue,
   getDailySummaries,
+  getStageForHours,
   migrateAppState,
   parseLocalDateTime,
 } from '../src/utils';
@@ -94,5 +95,12 @@ describe('parseLocalDateTime', () => {
     expect(parseLocalDateTime('2026-02-31', '08:00')).toBeNull();
     expect(parseLocalDateTime('2026-03-23', '25:10')).toBeNull();
     expect(parseLocalDateTime('bad-date', '09:00')).toBeNull();
+  });
+});
+
+describe('getStageForHours', () => {
+  it('uses the first stage for negative or zero elapsed values', () => {
+    expect(getStageForHours(-0.001).title).toBe('Settling In');
+    expect(getStageForHours(0).title).toBe('Settling In');
   });
 });

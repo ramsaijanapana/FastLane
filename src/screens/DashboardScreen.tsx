@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
+  ScrollView,
   StyleProp,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -30,9 +30,7 @@ import {
   formatHours,
   formatMl,
   formatShortDate,
-  formatTimeInputValue,
   getCompletedFastHours,
-  parseLocalDateTime,
 } from '../utils';
 import {
   ActionButton,
@@ -68,8 +66,101 @@ type DashboardScreenProps = {
 };
 
 type DashboardWindow = 'home' | 'targets' | 'hydration' | 'game' | 'history';
+type StartPickerPanel = 'date' | 'hour' | 'minute' | 'period' | null;
+type Meridiem = 'AM' | 'PM';
 
 const withAlpha = (color: string, alpha: string) => `${color}${alpha}`;
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => index);
+
+const formatDateOptionLabel = (timestamp: number, now: number) => {
+  const date = new Date(timestamp);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const candidate = new Date(timestamp);
+  candidate.setHours(0, 0, 0, 0);
+  const deltaDays = Math.round((today.getTime() - candidate.getTime()) / 86400000);
+
+  if (deltaDays === 0) {
+    return 'Today';
+  }
+
+  if (deltaDays === 1) {
+    return 'Yesterday';
+  }
+
+  return date.toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const getRecentDateOptions = (now: number) =>
+  Array.from({ length: 14 }, (_, index) => {
+    const candidate = new Date(now);
+    candidate.setHours(0, 0, 0, 0);
+    candidate.setDate(candidate.getDate() - index);
+
+    return {
+      value: formatDateInputValue(candidate.getTime()),
+      label: formatDateOptionLabel(candidate.getTime(), now),
+    };
+  });
+
+const getPickerStateFromTimestamp = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const hour24 = date.getHours();
+
+  return {
+    dateValue: formatDateInputValue(timestamp),
+    hour12: hour24 % 12 || 12,
+    minute: date.getMinutes(),
+    period: (hour24 >= 12 ? 'PM' : 'AM') as Meridiem,
+  };
+};
+
+const buildTimestampFromPicker = (
+  dateValue: string,
+  hour12: number,
+  minute: number,
+  period: Meridiem,
+) => {
+  const [year, month, day] = dateValue.split('-').map((value) => Number.parseInt(value, 10));
+
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    !Number.isFinite(hour12) ||
+    !Number.isFinite(minute)
+  ) {
+    return null;
+  }
+
+  let hour24 = hour12 % 12;
+
+  if (period === 'PM') {
+    hour24 += 12;
+  }
+
+  const parsed = new Date(year, month - 1, day, hour24, minute, 0, 0);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day ||
+    parsed.getHours() !== hour24 ||
+    parsed.getMinutes() !== minute
+  ) {
+    return null;
+  }
+
+  return parsed.getTime();
+};
+
+const formatPickerTimeLabel = (hour12: number, minute: number, period: Meridiem) =>
+  `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
 
 const polarToCartesian = (
   centerX: number,
@@ -176,8 +267,11 @@ export const DashboardScreen = ({
   const [pinnedStageIndex, setPinnedStageIndex] = useState<number | null>(null);
   const [activeWindow, setActiveWindow] = useState<DashboardWindow>('home');
   const [showStartEditor, setShowStartEditor] = useState(false);
-  const [startDateInput, setStartDateInput] = useState('');
-  const [startTimeInput, setStartTimeInput] = useState('');
+  const [startDateValue, setStartDateValue] = useState('');
+  const [startHourValue, setStartHourValue] = useState(12);
+  const [startMinuteValue, setStartMinuteValue] = useState(0);
+  const [startPeriodValue, setStartPeriodValue] = useState<Meridiem>('AM');
+  const [openStartPicker, setOpenStartPicker] = useState<StartPickerPanel>(null);
   const [startEditorStatus, setStartEditorStatus] = useState('');
   const detailStageIndex =
     hoveredStageIndex ?? pinnedStageIndex ?? (activeFast ? currentStageIndex : previewStageIndex);
@@ -252,26 +346,48 @@ export const DashboardScreen = ({
   const completedQuestCount = quests.filter((quest) => quest.done).length;
   const recentWindowSummary =
     fastHistory.length > 0 ? formatHours(getCompletedFastHours(fastHistory[0])) : 'No logs';
+  const startDateOptions = useMemo(() => getRecentDateOptions(now), [now]);
+  const selectedDateLabel =
+    startDateOptions.find((option) => option.value === startDateValue)?.label ??
+    startDateValue;
+  const selectedTimeLabel = formatPickerTimeLabel(
+    startHourValue,
+    startMinuteValue,
+    startPeriodValue,
+  );
 
   useEffect(() => {
     if (!activeFast) {
       setShowStartEditor(false);
-      setStartDateInput('');
-      setStartTimeInput('');
+      setStartDateValue('');
+      setStartHourValue(12);
+      setStartMinuteValue(0);
+      setStartPeriodValue('AM');
+      setOpenStartPicker(null);
       setStartEditorStatus('');
       return;
     }
 
-    setStartDateInput(formatDateInputValue(activeFast.startTime));
-    setStartTimeInput(formatTimeInputValue(activeFast.startTime));
+    const pickerState = getPickerStateFromTimestamp(activeFast.startTime);
+
+    setStartDateValue(pickerState.dateValue);
+    setStartHourValue(pickerState.hour12);
+    setStartMinuteValue(pickerState.minute);
+    setStartPeriodValue(pickerState.period);
+    setOpenStartPicker(null);
     setStartEditorStatus('');
   }, [activeFast]);
 
   const handleStartEditorSave = () => {
-    const parsedStartTime = parseLocalDateTime(startDateInput, startTimeInput);
+    const parsedStartTime = buildTimestampFromPicker(
+      startDateValue,
+      startHourValue,
+      startMinuteValue,
+      startPeriodValue,
+    );
 
     if (!parsedStartTime) {
-      setStartEditorStatus('Use YYYY-MM-DD and HH:MM to adjust the start.');
+      setStartEditorStatus('Choose a recent date and time to adjust the start.');
       return;
     }
 
@@ -287,6 +403,7 @@ export const DashboardScreen = ({
 
     onUpdateActiveFastStartTime(parsedStartTime);
     setStartEditorStatus('Fast start updated.');
+    setOpenStartPicker(null);
     setShowStartEditor(false);
   };
 
@@ -329,91 +446,217 @@ export const DashboardScreen = ({
                   tone="secondary"
                   disabled={!activeFast}
                 />
-                {activeFast ? (
+              </View>
+              {activeFast ? (
+                <View style={styles.startEditToggleRow}>
                   <ActionButton
-                    label={showStartEditor ? 'Hide Start Edit' : 'Edit Start'}
+                    label={showStartEditor ? 'Close Start Picker' : 'Adjust Start Time'}
                     onPress={() => {
                       setShowStartEditor((current) => !current);
+                      setOpenStartPicker(null);
                       setStartEditorStatus('');
                     }}
                     tone="secondary"
                   />
-                ) : null}
-              </View>
+                </View>
+              ) : null}
               {activeFast && showStartEditor ? (
                 <View style={styles.startEditor}>
                   <Text style={styles.startEditorTitle}>
-                    Forgot to start earlier? Adjust the live fast here.
+                    Forgot to start earlier? Pick the corrected start time here.
                   </Text>
-                  <View style={styles.startEditorRow}>
-                    <TextInput
-                      value={startDateInput}
-                      onChangeText={setStartDateInput}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor={palette.textMuted}
-                      autoCapitalize="none"
-                      style={[styles.startEditorInput, styles.startEditorInputWide]}
+                  <Text style={styles.startEditorSummary}>
+                    Selected start: {selectedDateLabel} at {selectedTimeLabel}
+                  </Text>
+                  {openStartPicker === 'date' ? (
+                    <ScrollView
+                      horizontal
+                      style={styles.startPickerTray}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.startPickerOptions}
+                    >
+                      {startDateOptions.map((option) => (
+                        <PickerOption
+                          key={option.value}
+                          label={option.label}
+                          selected={option.value === startDateValue}
+                          onPress={() => {
+                            setStartDateValue(option.value);
+                            setStartEditorStatus('');
+                            setOpenStartPicker(null);
+                          }}
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  {openStartPicker === 'hour' ? (
+                    <ScrollView
+                      horizontal
+                      style={styles.startPickerTray}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.startPickerOptions}
+                    >
+                      {HOUR_OPTIONS.map((hour) => (
+                        <PickerOption
+                          key={hour}
+                          label={String(hour)}
+                          selected={hour === startHourValue}
+                          onPress={() => {
+                            setStartHourValue(hour);
+                            setStartEditorStatus('');
+                            setOpenStartPicker(null);
+                          }}
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  {openStartPicker === 'minute' ? (
+                    <ScrollView
+                      horizontal
+                      style={styles.startPickerTray}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.startPickerOptions}
+                    >
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <PickerOption
+                          key={minute}
+                          label={String(minute).padStart(2, '0')}
+                          selected={minute === startMinuteValue}
+                          onPress={() => {
+                            setStartMinuteValue(minute);
+                            setStartEditorStatus('');
+                            setOpenStartPicker(null);
+                          }}
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  {openStartPicker === 'period' ? (
+                    <View style={styles.startPickerTrayStatic}>
+                      <View style={styles.startPickerOptions}>
+                        {(['AM', 'PM'] as Meridiem[]).map((period) => (
+                          <PickerOption
+                            key={period}
+                            label={period}
+                            selected={period === startPeriodValue}
+                            onPress={() => {
+                              setStartPeriodValue(period);
+                              setStartEditorStatus('');
+                              setOpenStartPicker(null);
+                            }}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
+                  <View style={styles.startPickerRow}>
+                    <PickerField
+                      label="Date"
+                      value={selectedDateLabel}
+                      isOpen={openStartPicker === 'date'}
+                      onPress={() =>
+                        setOpenStartPicker((current) =>
+                          current === 'date' ? null : 'date',
+                        )
+                      }
+                      style={styles.startPickerFieldWide}
                     />
-                    <TextInput
-                      value={startTimeInput}
-                      onChangeText={setStartTimeInput}
-                      placeholder="HH:MM"
-                      placeholderTextColor={palette.textMuted}
-                      autoCapitalize="none"
-                      style={styles.startEditorInput}
+                    <PickerField
+                      label="Hour"
+                      value={String(startHourValue)}
+                      isOpen={openStartPicker === 'hour'}
+                      onPress={() =>
+                        setOpenStartPicker((current) =>
+                          current === 'hour' ? null : 'hour',
+                        )
+                      }
+                    />
+                    <PickerField
+                      label="Min"
+                      value={String(startMinuteValue).padStart(2, '0')}
+                      isOpen={openStartPicker === 'minute'}
+                      onPress={() =>
+                        setOpenStartPicker((current) =>
+                          current === 'minute' ? null : 'minute',
+                        )
+                      }
+                    />
+                    <PickerField
+                      label="AM / PM"
+                      value={startPeriodValue}
+                      isOpen={openStartPicker === 'period'}
+                      onPress={() =>
+                        setOpenStartPicker((current) =>
+                          current === 'period' ? null : 'period',
+                        )
+                      }
                     />
                   </View>
-                  <View style={styles.startEditorActionRow}>
-                    <ActionButton label="Apply Start Time" onPress={handleStartEditorSave} />
-                    <ActionButton
-                      label="Reset"
-                      onPress={() => {
-                        if (!activeFast) {
-                          return;
-                        }
+                  {openStartPicker === null ? (
+                    <>
+                      <View style={styles.startEditorActionRow}>
+                        <ActionButton label="Apply Start Time" onPress={handleStartEditorSave} />
+                        <ActionButton
+                          label="Reset"
+                          onPress={() => {
+                            if (!activeFast) {
+                              return;
+                            }
 
-                        setStartDateInput(formatDateInputValue(activeFast.startTime));
-                        setStartTimeInput(formatTimeInputValue(activeFast.startTime));
-                        setStartEditorStatus('');
-                      }}
-                      tone="secondary"
-                    />
-                  </View>
-                  <Text style={styles.startEditorHint}>
-                    Use your local time. The running timer and stage ring update immediately.
-                  </Text>
-                  {startEditorStatus ? (
-                    <Text style={styles.startEditorStatus}>{startEditorStatus}</Text>
+                            const pickerState = getPickerStateFromTimestamp(
+                              activeFast.startTime,
+                            );
+                            setStartDateValue(pickerState.dateValue);
+                            setStartHourValue(pickerState.hour12);
+                            setStartMinuteValue(pickerState.minute);
+                            setStartPeriodValue(pickerState.period);
+                            setOpenStartPicker(null);
+                            setStartEditorStatus('');
+                          }}
+                          tone="secondary"
+                        />
+                      </View>
+                      <Text style={styles.startEditorHint}>
+                        Pick the date, hour, minute, and AM or PM. The timer and stage ring update immediately.
+                      </Text>
+                      {startEditorStatus ? (
+                        <Text style={styles.startEditorStatus}>{startEditorStatus}</Text>
+                      ) : null}
+                    </>
                   ) : null}
                 </View>
               ) : null}
-              <View style={styles.quickActionRow}>
-                <ActionButton
-                  label="Log Meal"
-                  onPress={() => onOpenTab('journal')}
-                  tone="secondary"
-                />
-                <ActionButton
-                  label={`Add ${WATER_PRESETS[0]} ml`}
-                  onPress={() => onAddWater(WATER_PRESETS[0])}
-                  tone="secondary"
-                />
-                <ActionButton
-                  label="Open Insights"
-                  onPress={() => onOpenTab('insights')}
-                  tone="secondary"
-                />
-              </View>
-              <View style={styles.targetRow}>
-                {TARGET_OPTIONS.map((hours) => (
-                  <ChipButton
-                    key={hours}
-                    label={`${hours}h`}
-                    onPress={() => onSelectTarget(hours)}
-                    selected={currentTarget === hours}
-                  />
-                ))}
-              </View>
+              {!showStartEditor ? (
+                <>
+                  <View style={styles.quickActionRow}>
+                    <ActionButton
+                      label="Log Meal"
+                      onPress={() => onOpenTab('journal')}
+                      tone="secondary"
+                    />
+                    <ActionButton
+                      label={`Add ${WATER_PRESETS[0]} ml`}
+                      onPress={() => onAddWater(WATER_PRESETS[0])}
+                      tone="secondary"
+                    />
+                    <ActionButton
+                      label="Open Insights"
+                      onPress={() => onOpenTab('insights')}
+                      tone="secondary"
+                    />
+                  </View>
+                  <View style={styles.targetRow}>
+                    {TARGET_OPTIONS.map((hours) => (
+                      <ChipButton
+                        key={hours}
+                        label={`${hours}h`}
+                        onPress={() => onSelectTarget(hours)}
+                        selected={currentTarget === hours}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </View>
 
             <View style={styles.homeStageColumn}>
@@ -889,6 +1132,76 @@ const WindowLauncherCard = ({
   );
 };
 
+const PickerField = ({
+  label,
+  value,
+  isOpen,
+  onPress,
+  style,
+}: {
+  label: string;
+  value: string;
+  isOpen?: boolean;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.startPickerField,
+        style,
+        isOpen && styles.startPickerFieldOpen,
+        pressed && styles.startPickerFieldPressed,
+      ]}
+    >
+      <Text style={styles.startPickerFieldLabel}>{label}</Text>
+      <View style={styles.startPickerFieldValueRow}>
+        <Text numberOfLines={1} style={styles.startPickerFieldValue}>
+          {value}
+        </Text>
+        <Text style={styles.startPickerFieldCaret}>{isOpen ? '▲' : '▼'}</Text>
+      </View>
+    </Pressable>
+  );
+};
+
+const PickerOption = ({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress: () => void;
+}) => {
+  const { theme: palette } = useTheme();
+  const styles = useMemo(() => createStyles(palette), [palette]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.startPickerOption,
+        selected && styles.startPickerOptionSelected,
+        pressed && styles.startPickerOptionPressed,
+      ]}
+    >
+      <Text
+        style={[
+          styles.startPickerOptionText,
+          selected && styles.startPickerOptionTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+};
+
 const createStyles = (palette: ThemePalette) =>
   StyleSheet.create({
     wrap: {
@@ -977,9 +1290,12 @@ const createStyles = (palette: ThemePalette) =>
       gap: 12,
       marginTop: 6,
     },
+    startEditToggleRow: {
+      marginTop: -2,
+    },
     startEditor: {
-      gap: 10,
-      padding: 14,
+      gap: 8,
+      padding: 12,
       borderRadius: 22,
       backgroundColor: palette.surfaceMuted,
       borderWidth: 1,
@@ -990,26 +1306,102 @@ const createStyles = (palette: ThemePalette) =>
       fontSize: 14,
       fontWeight: '700',
     },
-    startEditorRow: {
+    startEditorSummary: {
+      color: palette.textSoft,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    startPickerRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 10,
     },
-    startEditorInput: {
-      minWidth: 120,
-      minHeight: 48,
+    startPickerField: {
+      minWidth: 92,
+      minHeight: 54,
       borderRadius: 16,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      color: palette.text,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
       backgroundColor: palette.surfaceStrong,
       borderWidth: 1,
       borderColor: palette.track,
-      fontSize: 14,
+      gap: 4,
     },
-    startEditorInputWide: {
+    startPickerFieldOpen: {
+      borderColor: palette.amber,
+    },
+    startPickerFieldPressed: {
+      opacity: 0.86,
+    },
+    startPickerFieldWide: {
       flexGrow: 1,
-      minWidth: 168,
+      minWidth: 180,
+    },
+    startPickerFieldLabel: {
+      color: palette.textMuted,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.9,
+    },
+    startPickerFieldValue: {
+      flex: 1,
+      color: palette.textStrong,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    startPickerFieldValueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    startPickerFieldCaret: {
+      color: palette.textMuted,
+      fontSize: 10,
+      fontWeight: '800',
+    },
+    startPickerTray: {
+      borderRadius: 18,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
+    },
+    startPickerTrayStatic: {
+      borderRadius: 18,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
+      padding: 10,
+    },
+    startPickerOptions: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    startPickerOption: {
+      minHeight: 38,
+      justifyContent: 'center',
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.track,
+    },
+    startPickerOptionSelected: {
+      backgroundColor: palette.amber,
+      borderColor: palette.amber,
+    },
+    startPickerOptionPressed: {
+      opacity: 0.85,
+    },
+    startPickerOptionText: {
+      color: palette.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    startPickerOptionTextSelected: {
+      color: palette.background,
     },
     startEditorActionRow: {
       flexDirection: 'row',
