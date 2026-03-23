@@ -1,15 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { FASTING_STAGES, TARGET_OPTIONS, WATER_PRESETS } from '../constants';
 import { ThemePalette, useTheme } from '../theme';
-import type { FastSession, FastingStage, QuestStatus, UserSettings } from '../types';
+import type {
+  FastSession,
+  FastingStage,
+  QuestStatus,
+  TabKey,
+  UserSettings,
+} from '../types';
 import {
   clamp,
   formatDuration,
@@ -48,9 +56,47 @@ type DashboardScreenProps = {
   onStartFast: () => void;
   onFinishFast: () => void;
   onAddWater: (amountMl: number) => void;
+  onOpenQuestTab: (tab: TabKey) => void;
 };
 
 const withAlpha = (color: string, alpha: string) => `${color}${alpha}`;
+
+const polarToCartesian = (
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angleInDegrees: number,
+) => {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
+};
+
+const createDonutSlicePath = (
+  centerX: number,
+  centerY: number,
+  innerRadius: number,
+  outerRadius: number,
+  startAngle: number,
+  endAngle: number,
+) => {
+  const outerStart = polarToCartesian(centerX, centerY, outerRadius, startAngle);
+  const outerEnd = polarToCartesian(centerX, centerY, outerRadius, endAngle);
+  const innerEnd = polarToCartesian(centerX, centerY, innerRadius, endAngle);
+  const innerStart = polarToCartesian(centerX, centerY, innerRadius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
+    'Z',
+  ].join(' ');
+};
 
 export const DashboardScreen = ({
   activeFast,
@@ -73,6 +119,7 @@ export const DashboardScreen = ({
   onStartFast,
   onFinishFast,
   onAddWater,
+  onOpenQuestTab,
 }: DashboardScreenProps) => {
   const { theme: palette } = useTheme();
   const styles = useMemo(() => createStyles(palette), [palette]);
@@ -138,37 +185,53 @@ export const DashboardScreen = ({
         : 0;
   const detailStageState = activeFast
     ? elapsedHours >= detailStage.endHour
-      ? 'Done'
+      ? 'Completed'
       : elapsedHours >= detailStage.startHour
-        ? 'Current'
-        : 'Next'
+        ? 'Current stage'
+        : 'Next stage'
     : detailStageIndex === previewStageIndex
       ? 'Goal stage'
-      : 'Preview';
+      : 'Stage preview';
   const wheelSize = isCompact ? clamp(width - 72, 280, 332) : 360;
-  const nodeWidth = isCompact ? 78 : 94;
-  const nodeHeight = isCompact ? 50 : 58;
-  const orbitRadius = wheelSize / 2 - (isCompact ? 50 : 62);
-  const centerSize = wheelSize - (isCompact ? 122 : 142);
-  const stageNodes = useMemo(
-    () =>
-      FASTING_STAGES.map((stage, index) => {
-        const angle = -Math.PI / 2 + (index / FASTING_STAGES.length) * Math.PI * 2;
-        const left = wheelSize / 2 + Math.cos(angle) * orbitRadius - nodeWidth / 2;
-        const top = wheelSize / 2 + Math.sin(angle) * orbitRadius - nodeHeight / 2;
+  const outerRadius = wheelSize / 2 - 14;
+  const ringThickness = isCompact ? 34 : 36;
+  const innerRadius = outerRadius - ringThickness;
+  const centerSize = innerRadius * 2 - 8;
+  const totalStageHours = FASTING_STAGES.reduce(
+    (total, stage) => total + Math.max(stage.endHour - stage.startHour, 0),
+    0,
+  );
+  const gapAngle = 3;
+  const stageSlices = useMemo(
+    () => {
+      let currentAngle = 0;
+
+      return FASTING_STAGES.map((stage, index) => {
+        const stageHours = Math.max(stage.endHour - stage.startHour, 0);
+        const sweepAngle = (stageHours / Math.max(totalStageHours, 1)) * 360;
+        const startAngle = currentAngle + gapAngle / 2;
+        const endAngle = currentAngle + sweepAngle - gapAngle / 2;
+        currentAngle += sweepAngle;
 
         return {
           stage,
           index,
-          left,
-          top,
+          path: createDonutSlicePath(
+            wheelSize / 2,
+            wheelSize / 2,
+            innerRadius,
+            outerRadius,
+            startAngle,
+            endAngle,
+          ),
         };
-      }),
-    [nodeHeight, nodeWidth, orbitRadius, wheelSize],
+      });
+    },
+    [gapAngle, innerRadius, outerRadius, totalStageHours, wheelSize],
   );
   const stageSupportLine = activeFast
-    ? `Live timer: ${formatDuration(elapsedMilliseconds)} elapsed. The wheel updates as your fast moves forward.`
-    : `${currentTarget}h is selected, so the ring highlights where that goal lands before you start.`;
+    ? `Live timer: ${formatDuration(elapsedMilliseconds)} elapsed. Tap any slice to compare the current stage with what comes next.`
+    : `${currentTarget}h is selected, so ${detailStage.title.toLowerCase()} is highlighted by default. Tap any slice to compare stages.`;
 
   return (
     <View style={styles.wrap}>
@@ -264,12 +327,12 @@ export const DashboardScreen = ({
 
           <SectionCard
             title="Fasting Stages"
-            subtitle="Hover or tap any stage. The center always explains the selected phase."
+            subtitle="Hover or tap a slice. The center describes the selected stage."
           >
             <View style={styles.stageModule}>
               <View
                 style={[
-                  styles.stageWheel,
+                  styles.stageDial,
                   {
                     width: wheelSize,
                     height: wheelSize,
@@ -278,167 +341,119 @@ export const DashboardScreen = ({
               >
                 <View
                   style={[
-                    styles.stageWheelSurface,
+                    styles.stageDialSurface,
                     {
                       borderRadius: wheelSize / 2,
                     },
                   ]}
                 />
+                <Svg
+                  width={wheelSize}
+                  height={wheelSize}
+                  style={styles.stageSvg as never}
+                >
+                  {stageSlices.map(({ stage, index, path }) => {
+                    const isSelected = detailStageIndex === index;
+                    const isCurrent = activeFast && currentStageIndex === index;
+                    const isGoalStage = !activeFast && previewStageIndex === index;
+                    const sliceFill = isCurrent || isGoalStage
+                      ? stage.accent
+                      : isSelected
+                        ? withAlpha(stage.accent, palette.key === 'daylight' ? 'c8' : 'b8')
+                        : withAlpha(stage.accent, palette.key === 'daylight' ? '12' : '10');
+                    const sliceStroke = isCurrent || isGoalStage
+                      ? stage.accent
+                      : isSelected
+                      ? stage.accent
+                      : withAlpha(stage.accent, '58');
+                    const hoverProps: Record<string, unknown> =
+                      Platform.OS === 'web'
+                        ? {
+                            onMouseEnter: () => setHoveredStageIndex(index),
+                            onMouseLeave: () =>
+                              setHoveredStageIndex((current) =>
+                                current === index ? null : current,
+                              ),
+                          }
+                        : {};
+                    const interactiveProps = {
+                      onPress: () =>
+                        setPinnedStageIndex((current) =>
+                          current === index ? null : index,
+                        ),
+                      ...hoverProps,
+                    } as Record<string, unknown>;
+
+                    return (
+                      <Path
+                        key={stage.title}
+                        d={path}
+                        fill={sliceFill}
+                        stroke={sliceStroke}
+                        strokeWidth={isSelected ? 3.5 : 2}
+                        {...(interactiveProps as object)}
+                      />
+                    );
+                  })}
+                </Svg>
+
                 <View
+                  pointerEvents="none"
                   style={[
-                    styles.stageOuterRing,
-                    {
-                      width: wheelSize - 28,
-                      height: wheelSize - 28,
-                      borderRadius: (wheelSize - 28) / 2,
-                    },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.stageInnerRing,
-                    {
-                      width: wheelSize - 94,
-                      height: wheelSize - 94,
-                      borderRadius: (wheelSize - 94) / 2,
-                    },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.stageCenterCard,
+                    styles.stageCenterCore,
                     {
                       width: centerSize,
-                      minHeight: centerSize,
+                      height: centerSize,
                       borderRadius: centerSize / 2,
                       borderColor: withAlpha(detailStage.accent, '55'),
-                      backgroundColor:
-                        palette.key === 'daylight' || palette.key === 'sunrise'
-                          ? withAlpha(detailStage.accent, '10')
-                          : withAlpha(detailStage.accent, '14'),
+                      backgroundColor: palette.surfaceStrong,
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.stageStatePill,
-                      {
-                        borderColor: withAlpha(detailStage.accent, '55'),
-                        backgroundColor: withAlpha(detailStage.accent, '18'),
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.stageStateText, { color: detailStage.accent }]}
-                    >
-                      {detailStageState}
-                    </Text>
-                  </View>
-                  <Text style={styles.stageCenterTitle}>{detailStage.title}</Text>
-                  <Text style={styles.stageCenterRange}>
-                    {detailStage.startHour}h to {detailStage.endHour}h
-                  </Text>
-                  <Text style={styles.stageCenterBody}>{detailStage.detail}</Text>
-                  <ProgressBar progress={detailStageProgress} accent={detailStage.accent} />
-                  <Text style={styles.stageCenterMeta}>
-                    {activeFast
-                      ? `${formatHours(elapsedHours)} elapsed - target ${currentTarget}h`
-                      : `${currentTarget}h target - tap around the ring to compare`}
-                  </Text>
-                </View>
-
-                {stageNodes.map(({ stage, index, left, top }) => {
-                  const isSelected = detailStageIndex === index;
-                  const isCurrent = activeFast && currentStageIndex === index;
-                  const isGoalStage = !activeFast && previewStageIndex === index;
-                  const isDone = activeFast ? elapsedHours >= stage.endHour : index < previewStageIndex;
-                  const nodeBackground = isSelected
-                    ? withAlpha(stage.accent, palette.key === 'daylight' ? '18' : '22')
-                    : isCurrent || isGoalStage
-                      ? palette.surfaceMuted
-                      : palette.surfaceStrong;
-
-                  return (
-                    <Pressable
-                      key={stage.title}
-                      onHoverIn={() => setHoveredStageIndex(index)}
-                      onHoverOut={() =>
-                        setHoveredStageIndex((current) =>
-                          current === index ? null : current,
-                        )
-                      }
-                      onPress={() =>
-                        setPinnedStageIndex((current) =>
-                          current === index ? null : index,
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.stageNode,
+                  <View style={styles.stageCenterContent}>
+                    <View
+                      style={[
+                        styles.stageStatePill,
                         {
-                          width: nodeWidth,
-                          minHeight: nodeHeight,
-                          left,
-                          top,
-                          backgroundColor: nodeBackground,
-                          borderColor: isSelected ? stage.accent : palette.borderSoft,
+                          borderColor: withAlpha(detailStage.accent, '55'),
+                          backgroundColor: withAlpha(detailStage.accent, '18'),
                         },
-                        isDone && styles.stageNodeDone,
-                        pressed && styles.stageNodePressed,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.stageStateText, { color: detailStage.accent }]}
+                      >
+                        {detailStageState}
+                      </Text>
+                    </View>
+                    <Text style={styles.stageCenterTitle}>{detailStage.title}</Text>
+                    <Text style={styles.stageCenterRange}>
+                      {detailStage.startHour}h to {detailStage.endHour}h
+                    </Text>
+                    <Text style={styles.stageCenterBody}>{detailStage.detail}</Text>
+                    <View
+                      style={[
+                        styles.stageMiniMeter,
+                        { backgroundColor: withAlpha(detailStage.accent, '18') },
                       ]}
                     >
                       <View
                         style={[
-                          styles.stageNodeDot,
+                          styles.stageMiniMeterFill,
                           {
-                            backgroundColor:
-                              isDone && !isSelected ? palette.green : stage.accent,
+                            width: `${Math.max(detailStageProgress * 100, detailStageProgress > 0 ? 10 : 0)}%`,
+                            backgroundColor: detailStage.accent,
                           },
                         ]}
                       />
-                      <Text style={styles.stageNodeHours}>
-                        {stage.startHour}h-{stage.endHour}h
-                      </Text>
-                      <Text numberOfLines={2} style={styles.stageNodeTitle}>
-                        {stage.title}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={styles.stagePickerRow}>
-                {FASTING_STAGES.map((stage, index) => {
-                  const isSelected = detailStageIndex === index;
-
-                  return (
-                    <Pressable
-                      key={`${stage.title}-picker`}
-                      onPress={() =>
-                        setPinnedStageIndex((current) =>
-                          current === index ? null : index,
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.stagePickerChip,
-                        {
-                          borderColor: isSelected ? stage.accent : palette.borderSoft,
-                          backgroundColor: isSelected
-                            ? withAlpha(stage.accent, '18')
-                            : palette.surfaceStrong,
-                        },
-                        pressed && styles.stageNodePressed,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.stagePickerDot,
-                          { backgroundColor: stage.accent },
-                        ]}
-                      />
-                      <Text style={styles.stagePickerText}>{stage.title}</Text>
-                    </Pressable>
-                  );
-                })}
+                    </View>
+                    <Text style={styles.stageCenterMeta}>
+                      {activeFast
+                        ? `${formatHours(elapsedHours)} elapsed`
+                        : `${currentTarget}h target selected`}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <Text style={styles.stageSupportLine}>{stageSupportLine}</Text>
@@ -478,9 +493,19 @@ export const DashboardScreen = ({
                     <Text style={styles.questTitle}>{quest.title}</Text>
                     <Text style={styles.questMeta}>{quest.progressLabel}</Text>
                   </View>
-                  <Text style={[styles.questState, quest.done && styles.questStateDone]}>
-                    {quest.done ? 'Cleared' : 'Open'}
-                  </Text>
+                  <View style={styles.questActionWrap}>
+                    {quest.done ? (
+                      <Text style={[styles.questState, styles.questStateDone]}>
+                        Cleared
+                      </Text>
+                    ) : (
+                      <ActionButton
+                        label={quest.actionLabel ?? 'Open'}
+                        onPress={() => onOpenQuestTab(quest.actionTab ?? 'dashboard')}
+                        tone="secondary"
+                      />
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
@@ -628,7 +653,12 @@ const createStyles = (palette: ThemePalette) =>
       gap: 20,
     },
     targetStat: {
-      gap: 8,
+      gap: 10,
+      padding: 16,
+      borderRadius: 22,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
     },
     targetStatTop: {
       flexDirection: 'row',
@@ -654,7 +684,7 @@ const createStyles = (palette: ThemePalette) =>
     },
     questRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'space-between',
       gap: 12,
       padding: 16,
@@ -665,6 +695,10 @@ const createStyles = (palette: ThemePalette) =>
     },
     questTextWrap: {
       flex: 1,
+    },
+    questActionWrap: {
+      minWidth: 108,
+      alignSelf: 'center',
     },
     questTitle: {
       color: palette.textStrong,
@@ -677,11 +711,18 @@ const createStyles = (palette: ThemePalette) =>
       marginTop: 4,
     },
     questState: {
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      backgroundColor: palette.surfaceMuted,
       color: palette.amberSoft,
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: '800',
+      overflow: 'hidden',
+      textAlign: 'center',
     },
     questStateDone: {
+      backgroundColor: withAlpha(palette.green, palette.key === 'daylight' ? '20' : '16'),
       color: palette.green,
     },
     badgeWrap: {
@@ -702,42 +743,40 @@ const createStyles = (palette: ThemePalette) =>
       fontWeight: '700',
     },
     stageModule: {
-      gap: 14,
       alignItems: 'center',
+      gap: 14,
     },
-    stageWheel: {
+    stageDial: {
       position: 'relative',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    stageWheelSurface: {
+    stageSvg: {
+      position: 'absolute',
+    },
+    stageDialSurface: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: palette.surfaceStrong,
       borderWidth: 1,
       borderColor: palette.borderSoft,
     },
-    stageOuterRing: {
-      position: 'absolute',
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderColor: palette.borderSoft,
+    stageCenterCore: {
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      overflow: 'hidden',
     },
-    stageInnerRing: {
-      position: 'absolute',
-      borderWidth: 1,
-      borderColor: palette.border,
-    },
-    stageCenterCard: {
-      paddingHorizontal: 20,
-      paddingVertical: 18,
+    stageCenterContent: {
+      width: '84%',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      borderWidth: 1.5,
     },
     stageStatePill: {
       paddingVertical: 6,
-      paddingHorizontal: 10,
+      paddingHorizontal: 12,
       borderRadius: 999,
       borderWidth: 1,
     },
@@ -749,8 +788,8 @@ const createStyles = (palette: ThemePalette) =>
     },
     stageCenterTitle: {
       color: palette.textStrong,
-      fontSize: 22,
-      lineHeight: 28,
+      fontSize: 24,
+      lineHeight: 30,
       fontWeight: '900',
       textAlign: 'center',
     },
@@ -761,87 +800,46 @@ const createStyles = (palette: ThemePalette) =>
     },
     stageCenterBody: {
       color: palette.textSoft,
+      width: '100%',
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: 21,
       textAlign: 'center',
+      flexShrink: 1,
+    },
+    stageMiniMeter: {
+      width: '72%',
+      height: 7,
+      borderRadius: 999,
+      overflow: 'hidden',
+    },
+    stageMiniMeterFill: {
+      height: '100%',
+      borderRadius: 999,
     },
     stageCenterMeta: {
       color: palette.textMuted,
       fontSize: 12,
-      lineHeight: 18,
+      lineHeight: 17,
       textAlign: 'center',
-    },
-    stageNode: {
-      position: 'absolute',
-      borderRadius: 18,
-      paddingVertical: 8,
-      paddingHorizontal: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 4,
-      borderWidth: 1,
-    },
-    stageNodeDone: {
-      opacity: 0.94,
-    },
-    stageNodePressed: {
-      opacity: 0.8,
-    },
-    stageNodeDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 999,
-    },
-    stageNodeHours: {
-      color: palette.textMuted,
-      fontSize: 10,
-      fontWeight: '700',
-    },
-    stageNodeTitle: {
-      color: palette.textStrong,
-      fontSize: 11,
-      lineHeight: 13,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    stagePickerRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      gap: 10,
-    },
-    stagePickerChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingVertical: 9,
-      paddingHorizontal: 12,
-      borderRadius: 999,
-      borderWidth: 1,
-    },
-    stagePickerDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 999,
-    },
-    stagePickerText: {
-      color: palette.text,
-      fontSize: 12,
-      fontWeight: '700',
+      width: '100%',
     },
     stageSupportLine: {
       color: palette.textMuted,
       fontSize: 13,
       lineHeight: 19,
       textAlign: 'center',
-      maxWidth: 520,
+      maxWidth: 420,
     },
     historyRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
       gap: 14,
-      paddingVertical: 6,
+      padding: 16,
+      borderRadius: 20,
+      backgroundColor: palette.surfaceStrong,
+      borderWidth: 1,
+      borderColor: palette.borderSoft,
     },
     historyCopy: {
       flex: 1,

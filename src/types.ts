@@ -21,7 +21,13 @@ export type WaterEntry = {
 };
 
 export type CoachingTone = 'steady' | 'gentle' | 'focused';
-export type ThemeKey = 'midnight' | 'daylight' | 'forest' | 'sunrise';
+export type ThemeKey =
+  | 'midnight'
+  | 'daylight'
+  | 'forest'
+  | 'sunrise'
+  | 'ocean'
+  | 'rose';
 
 export type UserSettings = {
   displayName: string;
@@ -69,6 +75,8 @@ export type QuestStatus = {
   title: string;
   progressLabel: string;
   done: boolean;
+  actionLabel?: string;
+  actionTab?: TabKey;
 };
 
 export type AuthProvider = 'password' | 'google' | 'facebook';

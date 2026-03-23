@@ -129,6 +129,56 @@ const themes: Record<ThemeKey, ThemePalette> = {
     red: '#e11d48',
     redSurface: '#ffe4e6',
   },
+  ocean: {
+    key: 'ocean',
+    label: 'Ocean',
+    statusBarStyle: 'light',
+    background: '#06131e',
+    backgroundAlt: '#0d2233',
+    surface: 'rgba(10, 26, 39, 0.92)',
+    surfaceStrong: '#102739',
+    surfaceMuted: '#153349',
+    border: 'rgba(142, 215, 255, 0.08)',
+    borderSoft: '#1f4863',
+    track: '#17384f',
+    text: '#edf8ff',
+    textStrong: '#f7fbff',
+    textMuted: '#8fb3ca',
+    textSoft: '#c1daea',
+    amber: '#f59e0b',
+    amberSoft: '#fbbf24',
+    teal: '#22d3ee',
+    cyan: '#60a5fa',
+    purple: '#a78bfa',
+    green: '#86efac',
+    red: '#fb7185',
+    redSurface: '#3f1b28',
+  },
+  rose: {
+    key: 'rose',
+    label: 'Rose',
+    statusBarStyle: 'dark',
+    background: '#fff4f6',
+    backgroundAlt: '#ffe5ea',
+    surface: 'rgba(255, 249, 250, 0.94)',
+    surfaceStrong: '#fff8f9',
+    surfaceMuted: '#ffe0e7',
+    border: 'rgba(145, 37, 73, 0.1)',
+    borderSoft: '#f3c4d1',
+    track: '#f6d6df',
+    text: '#3b1624',
+    textStrong: '#2a1019',
+    textMuted: '#8e6170',
+    textSoft: '#714654',
+    amber: '#ea580c',
+    amberSoft: '#f97316',
+    teal: '#14b8a6',
+    cyan: '#0ea5e9',
+    purple: '#a855f7',
+    green: '#16a34a',
+    red: '#e11d48',
+    redSurface: '#ffe4ec',
+  },
 };
 
 export const themeOptions = Object.values(themes).map(
@@ -142,7 +192,11 @@ export const themeOptions = Object.values(themes).map(
           ? 'Bright and clean'
           : key === 'forest'
             ? 'Cool, calm contrast'
-            : 'Warm and energetic',
+            : key === 'sunrise'
+              ? 'Warm and energetic'
+              : key === 'ocean'
+                ? 'Deep blue contrast'
+                : 'Soft rose light',
     previewBackground: backgroundAlt,
     swatches: [amber, teal, purple],
   }),

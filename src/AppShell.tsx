@@ -22,12 +22,13 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { ThemePalette, useTheme } from './theme';
+import { themeOptions, ThemePalette, useTheme } from './theme';
 import type {
   AppState,
   AuthSession,
   SocialAuthProvider,
   TabKey,
+  ThemeKey,
   UserSettings,
 } from './types';
 import {
@@ -493,6 +494,22 @@ export const AppShell = () => {
     pulseSuccess();
   };
 
+  const handleQuickTheme = (themeKey: ThemeKey) => {
+    setAppState((current) =>
+      stampState({
+        ...current,
+        settings: {
+          ...current.settings,
+          themeKey,
+        },
+      }),
+    );
+  };
+
+  const handleOpenQuestTab = (tab: TabKey) => {
+    setSelectedTab(tab);
+  };
+
   const hydrateCloudSession = async (session: AuthSession) => {
     await fetchProfile(session.token);
     setAuthSession(session);
@@ -771,6 +788,24 @@ export const AppShell = () => {
           ))}
         </View>
 
+        <SectionCard
+          title="Theme"
+          subtitle="Switch appearance instantly. Dark, light, and extra visual themes are available."
+          style={styles.themeCard}
+        >
+          <View style={styles.themeQuickRow}>
+            {themeOptions.map((option) => (
+              <ChipButton
+                key={option.key}
+                label={option.label}
+                onPress={() => handleQuickTheme(option.key)}
+                selected={appState.settings.themeKey === option.key}
+                accent={option.swatches[0]}
+              />
+            ))}
+          </View>
+        </SectionCard>
+
         {selectedTab === 'dashboard' ? (
           <DashboardScreen
             activeFast={activeFast}
@@ -793,6 +828,7 @@ export const AppShell = () => {
             onStartFast={handleStartFast}
             onFinishFast={handleFinishFast}
             onAddWater={handleAddWater}
+            onOpenQuestTab={handleOpenQuestTab}
           />
         ) : null}
 
@@ -970,6 +1006,14 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
     lineHeight: 19,
   },
   tabRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  themeCard: {
+    backgroundColor: palette.surface,
+  },
+  themeQuickRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,

@@ -313,26 +313,36 @@ export const getQuestStatuses = ({
       progressLabel:
         Boolean(activeFast) || completedToday.length > 0 ? '1/1 complete' : '0/1 complete',
       done: Boolean(activeFast) || completedToday.length > 0,
+      actionLabel: 'Open Timer',
+      actionTab: 'dashboard',
     },
     {
       title: 'Log 2 meals today',
       progressLabel: `${Math.min(mealsToday.length, 2)}/2 complete`,
       done: mealsToday.length >= 2,
+      actionLabel: 'Log Meal',
+      actionTab: 'journal',
     },
     {
       title: 'Hit your water goal',
       progressLabel: `${Math.min(waterTodayMl, settings.dailyWaterGoalMl)}/${settings.dailyWaterGoalMl} ml`,
       done: waterTodayMl >= settings.dailyWaterGoalMl,
+      actionLabel: 'Add Water',
+      actionTab: 'dashboard',
     },
     {
       title: 'Reach your weekly fast target',
       progressLabel: `${Math.min(weeklyCompletion, settings.weeklyFastGoal)}/${settings.weeklyFastGoal} complete`,
       done: weeklyCompletion >= settings.weeklyFastGoal,
+      actionLabel: 'View Trend',
+      actionTab: 'insights',
     },
     {
       title: 'Hit your fast target once today',
       progressLabel: completedTargetToday ? '1/1 complete' : '0/1 complete',
       done: completedTargetToday,
+      actionLabel: 'Check Fast',
+      actionTab: 'dashboard',
     },
   ];
 };
@@ -411,7 +421,14 @@ export const migrateAppState = (raw: unknown): AppState => {
   const value = raw as Partial<AppState> & {
     settings?: Partial<AppState['settings']>;
   };
-  const validThemeKeys: ThemeKey[] = ['midnight', 'daylight', 'forest', 'sunrise'];
+  const validThemeKeys: ThemeKey[] = [
+    'midnight',
+    'daylight',
+    'forest',
+    'sunrise',
+    'ocean',
+    'rose',
+  ];
   const themeKey = validThemeKeys.includes(value.settings?.themeKey as ThemeKey)
     ? (value.settings?.themeKey as ThemeKey)
     : DEFAULT_SETTINGS.themeKey;

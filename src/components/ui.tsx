@@ -20,11 +20,15 @@ export const SectionCard = ({
 
   return (
     <View style={[styles.card, style]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <View style={styles.cardAccent} />
+      <View style={styles.headerBlock}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
+        <View style={styles.divider} />
       </View>
-      {children}
+      <View style={styles.body}>{children}</View>
     </View>
   );
 };
@@ -156,14 +160,44 @@ const createStyles = (theme: ThemePalette) =>
   StyleSheet.create({
     card: {
       borderRadius: 30,
-      padding: 22,
       backgroundColor: theme.surface,
       borderWidth: 1,
-      borderColor: theme.border,
-      gap: 18,
+      borderColor: theme.borderSoft,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOpacity: theme.key === 'daylight' || theme.key === 'sunrise' || theme.key === 'rose' ? 0.08 : 0.24,
+      shadowRadius: 24,
+      shadowOffset: {
+        width: 0,
+        height: 14,
+      },
+      elevation: 10,
+    },
+    cardAccent: {
+      height: 4,
+      backgroundColor: theme.amber,
+      opacity: theme.key === 'daylight' || theme.key === 'sunrise' || theme.key === 'rose' ? 0.8 : 0.92,
+    },
+    headerBlock: {
+      paddingHorizontal: 22,
+      paddingTop: 20,
+      paddingBottom: 16,
+      backgroundColor: theme.surface,
     },
     header: {
       gap: 6,
+    },
+    divider: {
+      marginTop: 16,
+      height: 1,
+      backgroundColor: theme.borderSoft,
+    },
+    body: {
+      paddingHorizontal: 22,
+      paddingTop: 18,
+      paddingBottom: 22,
+      backgroundColor: theme.surfaceStrong,
+      gap: 18,
     },
     title: {
       color: theme.text,
@@ -188,9 +222,9 @@ const createStyles = (theme: ThemePalette) =>
       minWidth: 120,
       padding: 18,
       borderRadius: 24,
-      backgroundColor: theme.surfaceStrong,
+      backgroundColor: theme.surfaceMuted,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: theme.borderSoft,
       gap: 4,
     },
     metricValue: {
